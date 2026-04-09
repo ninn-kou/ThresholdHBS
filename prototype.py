@@ -1,4 +1,7 @@
 from __future__ import annotations
+import hashlib
+import os
+import secrets
 
 """
 A centralized n-of-n threshold hash-based signature prototype.
@@ -249,7 +252,9 @@ def hash_message(message: bytes, hash_name: str = "sha256") -> bytes:
         Converts an arbitrary-length message into the fixed-length digest used by
         Lamport sign and verify operations.
     """
-    pass
+    h = hashlib.new(hash_name)
+    h.update(message)
+    return h.digest()
 
 
 def lamport_generate_keypair(
@@ -270,7 +275,20 @@ def lamport_generate_keypair(
     Purpose:
         Creates the one-time signing material stored at one Merkle-tree leaf.
     """
-    pass
+    num_bits = digest_size_bytes * 8
+    secret_key: List[List[bytes]] = []
+    public_key: List[List[bytes]] = []
+    
+    for _ in range(num_bits):
+        sk0 = secrets.token_bytes(element_size_bytes)
+        sk1 = secrets.token_bytes(element_size_bytes)
+        pk0 = hash_message(sk0, hash_name)
+        pk1 = hash_message(sk1, hash_name)
+        secret_key.append([sk0, sk1])
+        public_key.append([pk0, pk1])
+        
+    return secret_key, public_key
+
 
 
 def lamport_sign(digest: bytes, secret_key: Any) -> List[bytes]:
@@ -286,7 +304,14 @@ def lamport_sign(digest: bytes, secret_key: Any) -> List[bytes]:
     Purpose:
         Selects one secret element per digest bit to form the one-time signature.
     """
-    pass
+    signature_values: List[bytes] = []
+    for byte_index, byte_val in enumerate(digest):
+        for bit_position in range(7, -1, -1):  
+            bit = (byte_val >> bit_position) & 1
+            i = byte_index * 8 + (7 - bit_position)
+            signature_values.append(secret_key[i][bit])
+    return signature_values
+
 
 
 def lamport_verify(
@@ -309,7 +334,19 @@ def lamport_verify(
     Purpose:
         Checks the one-time signature independently of the Merkle tree.
     """
-    pass
+    num_bits = len(digest) * 8
+    if len(signature_values) != num_bits:
+        return False
+ 
+    for byte_index, byte_val in enumerate(digest):
+        for bit_position in range(7, -1, -1):  
+            bit = (byte_val >> bit_position) & 1
+            i = byte_index * 8 + (7 - bit_position)
+            revealed = signature_values[i]
+            expected_pk = public_key[i][bit]
+            if hash_message(revealed, hash_name) != expected_pk:
+                return False
+    return True
 
 
 def build_merkle_tree(leaf_public_keys: Sequence[Any], hash_name: str = "sha256") -> Tuple[MerkleTree, bytes]:

@@ -150,7 +150,7 @@ class MerkleTree:
         for pk in leaf_public_keys:
             self.leaves.append(MerkleNode(self._hash_public_key(pk)))
 
-        # Append append padding to array
+        # Append padding to array
         zero = bytes(self._digest_size())
         for _ in range(self.n_leaves - self.n_real):
             self.leaves.append(MerkleNode(zero))
@@ -174,7 +174,7 @@ class MerkleTree:
                 left = current_level[i]
                 right = current_level[i + 1]
 
-                parent_digest = self._hash_children(left.digest, right.digest)
+                parent_digest = MerkleTree.hash_digests(self.hash_name, left.digest, right.digest)
                 next_level.append(MerkleNode(parent_digest, left, right))
             self._levels.append(next_level)
             current_level = next_level
@@ -230,10 +230,12 @@ class MerkleTree:
                 h.update(hash_bytes)
 
         return h.digest()
- 
-    def _hash_children(self, left: bytes, right: bytes) -> bytes:
-        """Hash two child digests together to form a parent digest."""
-        h = self._hasher()
+    
+    # helper function to combine 2 hash digests 
+    @staticmethod
+    def hash_digests(hash_name: str, left: bytes, right: bytes) -> bytes:
+        """Hash two digests together to form a parent digest."""
+        h = hashlib.new(hash_name)
         h.update(left)
         h.update(right)
         return h.digest()

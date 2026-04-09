@@ -153,6 +153,14 @@ class MerkleTree:
             self.leaves.append(MerkleNode(zero))
  
         # Build the tree bottom-up while storing every level store every level
+        # _levels is a 2D array where each inner list is one level of the tree:
+        #
+        #   _levels[0] = [leaf0, leaf1, leaf2, leaf3]        ← leaf level
+        #   _levels[-1] = [root]                              ← root level
+        #
+        # Within each level, nodes sit at consecutive even/odd index pairs:
+        #   _levels[k][i] and _levels[k][i^1] are always siblings,
+        #   with their parent at _levels[k+1][i//2].
         self._levels: List[List[MerkleNode]] = [self.leaves]
         current_level = self.leaves
 

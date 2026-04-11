@@ -62,7 +62,7 @@ class CommonReferenceValue:
     randomizer: bytes
     randomizer_checker: bytes
     path: bytes
-    #secret_keys: List[List[bytes]]
+    secret_key: List[List[bytes]]
 
 @dataclass
 class DealerOutput:
@@ -557,12 +557,19 @@ def dealer_setup(params: SystemParameters, party_ids: Sequence[str]):
 
             trustees[index][key_id] = (prf_key, randomizer_shares[-1], chk_shares[-1], path_shares[-1], secret_key_shares[-1])
 
-        print(path)
+        crv_secret_key = secret_key
+
+        for i in range(len(secret_key)):
+            for j in range(len(secret_key[0])):
+                for secret_key_share in secret_key_shares:
+                    crv_secret_key[i][j] = crv_secret_key[i][j] ^ secret_key_share[i][j]
+
 
         crv = CommonReferenceValue(
             randomizer=functools.reduce(lambda x, y: xor(x, y), randomizer_shares, randomizer),
             path=functools.reduce(lambda x, y: xor(x, y), path_shares, concat(path)),
-            randomizer_checker=functools.reduce(lambda x, y: xor(x, y), chk_shares, concat(chk))
+            randomizer_checker=functools.reduce(lambda x, y: xor(x, y), chk_shares, concat(chk)),
+            secret_key=crv_secret_key
         )
 
         common_reference_values[key_id] = crv

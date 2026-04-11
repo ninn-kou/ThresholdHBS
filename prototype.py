@@ -1,7 +1,9 @@
 from __future__ import annotations
 import hashlib
+import hmac
 import os
 import secrets
+import functools
 
 """
 A centralized n-of-n threshold hash-based signature prototype.
@@ -54,6 +56,13 @@ class PartyBundle:
     public_key_shares_by_key_id: Dict[int, Any]
     used_key_ids: Set[int] = field(default_factory=set)
 
+@dataclass
+class CommonReferenceValue:
+
+    randomizer: bytes
+    randomizer_checker: bytes
+    path: bytes
+    #secret_keys: List[List[bytes]]
 
 @dataclass
 class DealerOutput:
@@ -66,6 +75,7 @@ class DealerOutput:
     """
 
     root_public_key: bytes
+    common_reference_value: CommonReferenceValue
     auth_paths_by_key_id: Dict[int, List[bytes]]
     party_bundles: Dict[str, PartyBundle]
 
@@ -263,7 +273,7 @@ def lamport_generate_keypair(
     digest_size_bytes: int,
     element_size_bytes: int,
     hash_name: str = "sha256",
-) -> Tuple[Any, Any]:
+) -> Tuple[List[List[bytes]], List[List[bytes]]]:
     """Generate one Lamport one-time keypair.
 
     Args:
@@ -426,6 +436,8 @@ def verify_merkle_path(
 
     return current == root_public_key
 
+'''
+My distinct impression is that these functions do not need to exist
 
 def split_lamport_keypair_into_xor_shares(
     secret_key: Any,
@@ -464,9 +476,29 @@ def combine_signature_shares(signature_shares: Sequence[SignatureShare]) -> Tupl
         Lamport public key from additive shares.
     """
     pass
+'''
+
+def prf_hmac (
+    key: bytes, 
+    label: str, 
+    input: bytes, 
+    output_length: int
+) -> bytes:
+    message = len(label).to_bytes(1, 'big') + label.encode('utf-8') + input
+    
+    h = hmac.new(key, message, "sha256")
+    digest = h.digest()
+
+    if len(digest) > output_length:
+        return digest[:output_length]
+    else:
+        return hashlib.pbkdf2_hmac("sha256", digest, b'', 1, dklen=output_length)
 
 
-def dealer_setup(params: SystemParameters, party_ids: Sequence[str]) -> DealerOutput:
+
+
+# This only handles the K-of-K case so far, I need to refactor this to allow for multiple parties of varying sizes from 2...k
+def dealer_setup(params: SystemParameters, party_ids: Sequence[str]):
     """Run trusted setup for the minimal prototype.
 
     Args:
@@ -481,8 +513,67 @@ def dealer_setup(params: SystemParameters, party_ids: Sequence[str]) -> DealerOu
         Generates all Lamport leaf keys, builds the Merkle tree, XOR-splits every
         leaf keypair, and packages the resulting shares for distribution.
     """
-    pass
 
+    secret_keys = []
+    public_keys = []
+
+    for key_id in range(params.num_leaves):
+        secret_key, public_key = lamport_generate_keypair(params.digest_size_bytes, params.lamport_element_size_bytes)
+
+        secret_keys.append(secret_key)
+        public_keys.append(public_key)
+
+    
+    common_reference_values = [None] * params.num_leaves
+    trustees = [[None] * params.num_leaves for _ in range(params.num_parties)]
+
+    merkle_tree, composite_public_key = build_merkle_tree(public_keys)
+
+    randomizer = os.urandom(params.digest_size_bytes)
+
+    # Compute the shares and common reference value
+    for key_id, secret_key in enumerate(secret_keys):
+        prf_keys: List[bytes] = [secrets.token_bytes(32) for _ in range(params.num_parties)]
+        path: List[bytes] = get_auth_path(merkle_tree, key_id)
+        chk: List[bytes] = []
+
+        chk_shares: List[bytes] = []
+        randomizer_shares: List[bytes] = []
+        path_shares: List[List[bytes]] = []
+        secret_key_shares: List[List[List[bytes]]] = []
+
+        for index, prf_key in enumerate(prf_keys):
+            chk.append(prf_hmac(prf_key, "AUTH", key_id.to_bytes() + randomizer, params.digest_size_bytes))
+            randomizer_shares.append(prf_hmac(prf_key, "R", key_id.to_bytes(), params.digest_size_bytes))
+            chk_shares.append(prf_hmac(prf_key, "CHK", key_id.to_bytes(), params.digest_size_bytes * len(prf_keys)))
+            path_shares.append(prf_hmac(prf_key, "PATH", key_id.to_bytes(), sum(map(lambda x: len(x), path))))
+
+            # every row of the secret_key should be the same hence the length of secret_key[0] is sufficient
+            secret_key_shares.append([])
+            for i in range(len(secret_key)):
+                secret_key_shares[index].append([])
+                for j in range(len(secret_key[0])):
+                    secret_key_shares[index][i].append(prf_hmac(prf_key, "CHAIN", key_id.to_bytes() + i.to_bytes() + j.to_bytes(), params.digest_size_bytes))
+
+            trustees[index][key_id] = (prf_key, randomizer_shares[-1], chk_shares[-1], path_shares[-1], secret_key_shares[-1])
+
+        print(path)
+
+        crv = CommonReferenceValue(
+            randomizer=functools.reduce(lambda x, y: xor(x, y), randomizer_shares, randomizer),
+            path=functools.reduce(lambda x, y: xor(x, y), path_shares, concat(path)),
+            randomizer_checker=functools.reduce(lambda x, y: xor(x, y), chk_shares, concat(chk))
+        )
+
+        common_reference_values[key_id] = crv
+        
+    return (common_reference_values, trustees, [])
+
+def xor (a: bytes, b: bytes) -> bytes:
+    return bytes([_a ^ _b for _a, _b in zip(a, b)])
+
+def concat (x: List[bytes]) -> bytes:
+    return functools.reduce(lambda a, b: a + b, x)
 
 def party_sign_share(
     party_bundle: PartyBundle,

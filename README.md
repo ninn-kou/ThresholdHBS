@@ -1,47 +1,66 @@
 ## COMP6453-Team-Project
 
-### Part 0: Shared Data Classes
+### Code Structures
 
-`SystemParameters`
-`PartyBundle`
-`DealerOutput`
-`SignatureShare`
-`ThresholdSignature`
+- `threshold_hbs/lamport.py` for Lamport primitives
+- `threshold_hbs/merkle.py` for Merkle tree logic
+- `threshold_hbs/sharing.py` for XOR/PRF helpers
+- `threshold_hbs/protocol.py` for dealer/trustee/aggregator logic
+- `threshold_hbs/models.py` for dataclasses
 
-### Part 1: Lamport core and hashing
+### Initial Demo & Testing
 
-This part owns the one-time signature primitive and nothing else. It can be built first and unit-tested independently.
+Run demo with:
 
-Functions:
-`hash_message`
-`lamport_generate_keypair`
-`lamport_sign`
-`lamport_verify`
+```bash
+python demo.py
+```
 
-### Part 2: Merkle tree layer
+Expected Output:
 
-This part commits all Lamport public keys under one public root and handles inclusion proofs.
+```
+key_id: 0
+randomizer_len: 8
+auth_path_len: 3
+lamport_values: 64
+verified(original): True
+verified(tampered): False
+```
 
-Functions:
-`build_merkle_tree`
-`get_auth_path`
-`verify_merkle_path`
+Run unit tests with:
 
-### Part 3: Dealer setup and XOR sharing
+```bash
+python -m unittest discover -s tests -v
+```
 
-This part is the offline setup layer. It depends on Part 1 and Part 2.
+### Extensions
 
-Functions:
-`split_lamport_keypair_into_xor_shares`
-`combine_signature_shares`
-`dealer_setup`
+#### Extension 1: k-of-n via k-of-k subtrees
 
-### Part 4: Online signing, final verification, benchmark
+- `threshold_hbs/extensions/sharding.py`
 
-This part is the full user-visible protocol layer. It depends on Parts 1-3.
+Implement coalition-aware sharding first. Add a coalition list, map each `key_id` to exactly one coalition, and keep per-coalition usage counters so no two coalitions can reuse the same one-time key.
 
-Functions:
-`party_sign_share`
-`aggregator_sign`
-`verify_threshold_signature`
-`benchmark_minimal_prototype`
+#### Extension 2: peer-to-peer message choice and signer choice
+
+- `threshold_hbs/extensions/peer_to_peer.py`
+
+Move message approval and signer selection out of the centralized aggregator path. Add a lightweight coordination layer where trustees approve the message and chosen coalition first, and let the untrusted server only return helper strings / CRV fragments.
+
+#### Extension 3: Merkle batching at the leaves
+
+- `threshold_hbs/extensions/batch_leaves.py`
+
+Treat each leaf as a batch container rather than a single message slot. Build a small Merkle tree over buffered messages at the leaf, sign the batch root once, and attach both an inner batch proof and the outer authentication path during verification.
+
+#### Extension 4: Merkle trees in higher layers
+
+- `threshold_hbs/extensions/hybrid_merkle.py`
+
+Generalize the current Merkle code so upper layers can be built from different node encodings while leaf behavior stays the same. Keep the current Lamport leaf verification untouched, then add a second layer of verification rules for higher-layer nodes.
+
+#### Extension 5: Winternitz support
+
+- `threshold_hbs/extensions/winternitz.py`
+
+Add a new OTS module instead of modifying Lamport code directly. Implement Winternitz key generation, checksum handling, signing, and candidate-public-key reconstruction during verification, then let `protocol.py` choose between Lamport and Winternitz through a small adapter layer.

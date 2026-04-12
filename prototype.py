@@ -1,7 +1,9 @@
 from __future__ import annotations
 import hashlib
+import hmac
 import os
 import secrets
+import functools
 
 """
 A centralized n-of-n threshold hash-based signature prototype.
@@ -37,38 +39,13 @@ class SystemParameters:
     digest_size_bytes: int = 32
     lamport_element_size_bytes: int = 32
 
-
 @dataclass
-class PartyBundle:
-    """Trusted-setup output stored by one party.
+class CommonReferenceValue:
 
-    Attributes:
-        party_id: Stable identifier for the party.
-        secret_key_shares_by_key_id: Mapping from key_id to this party's Lamport secret-key share.
-        public_key_shares_by_key_id: Mapping from key_id to this party's Lamport public-key share.
-        used_key_ids: Local record of which key IDs this party has already used.
-    """
-
-    party_id: str
-    secret_key_shares_by_key_id: Dict[int, Any]
-    public_key_shares_by_key_id: Dict[int, Any]
-    used_key_ids: Set[int] = field(default_factory=set)
-
-
-@dataclass
-class DealerOutput:
-    """Artifacts produced by the trusted dealer.
-
-    Attributes:
-        root_public_key: Merkle root published to verifiers.
-        auth_paths_by_key_id: Mapping from key_id to Merkle authentication path.
-        party_bundles: Mapping from party_id to per-party shared state.
-    """
-
-    root_public_key: bytes
-    auth_paths_by_key_id: Dict[int, List[bytes]]
-    party_bundles: Dict[str, PartyBundle]
-
+    randomizer: bytes
+    randomizer_checker: List[bytes]
+    path: List[bytes]
+    secret_key: List[List[bytes]]
 
 @dataclass
 class SignatureShare:
@@ -82,9 +59,9 @@ class SignatureShare:
     """
 
     party_id: str
-    key_id: int
-    signature_value_share: Any
-    public_key_share: Any
+    signature: bytes
+    randomizer: bytes
+    path: List[bytes]
 
 
 @dataclass
@@ -263,7 +240,7 @@ def lamport_generate_keypair(
     digest_size_bytes: int,
     element_size_bytes: int,
     hash_name: str = "sha256",
-) -> Tuple[Any, Any]:
+) -> Tuple[List[List[bytes]], List[List[bytes]]]:
     """Generate one Lamport one-time keypair.
 
     Args:
@@ -426,6 +403,8 @@ def verify_merkle_path(
 
     return current == root_public_key
 
+'''
+My distinct impression is that these functions do not need to exist
 
 def split_lamport_keypair_into_xor_shares(
     secret_key: Any,
@@ -464,32 +443,172 @@ def combine_signature_shares(signature_shares: Sequence[SignatureShare]) -> Tupl
         Lamport public key from additive shares.
     """
     pass
+'''
 
+def prf_hmac (
+    key: bytes, 
+    label: str, 
+    input: bytes, 
+    output_length: int
+) -> bytes:
+    message = len(label).to_bytes(1, 'big') + label.encode('utf-8') + input
+    
+    h = hmac.new(key, message, "sha256")
+    digest = h.digest()
 
+    if len(digest) > output_length:
+        return digest[:output_length]
+    else:
+        return hashlib.pbkdf2_hmac("sha256", digest, b'', 1, dklen=output_length)
+
+@dataclass
+class TrusteeSharePerKey:
+    randomizer_share: bytes
+    randomizer_checker_share: bytes
+    path_share: List[bytes]
+    sk_share: List[List[bytes]]
+
+@dataclass
+class TrusteeShare:
+    prf_key: bytes
+    shares: List[TrusteeSharePerKey]
+
+# We should store the used keys as part of the TrusteeShare objects but, I cannot be bothered writing the code in that way currently
+@dataclass
+class DealerOutput:
+    party_id: str
+    composite_public_key: bytes
+    common_reference_values: List[CommonReferenceValue]
+    public_keys_by_key_id: List[List[List[bytes]]]
+    members: Dict[int, TrusteeShare]
+    used_keys: Set[int] = field(default_factory=set)
+
+# This only handles the K-of-K case so far, I need to refactor this to allow for multiple parties of varying sizes from 2...k
 def dealer_setup(params: SystemParameters, party_ids: Sequence[str]) -> DealerOutput:
-    """Run trusted setup for the minimal prototype.
+    secret_keys = []
+    public_keys = []
 
-    Args:
-        params: Global configuration for the prototype.
-        party_ids: Stable identifiers for all participating parties.
+    for key_id in range(params.num_leaves):
+        secret_key, public_key = lamport_generate_keypair(params.digest_size_bytes, params.lamport_element_size_bytes)
 
-    Returns:
-        A ``DealerOutput`` containing the public root, per-leaf authentication
-        paths, and one share bundle for each party.
+        secret_keys.append(secret_key)
+        public_keys.append(public_key)
 
-    Purpose:
-        Generates all Lamport leaf keys, builds the Merkle tree, XOR-splits every
-        leaf keypair, and packages the resulting shares for distribution.
-    """
-    pass
+    
+    common_reference_values: List[CommonReferenceValue | None] = [None] * params.num_leaves
+    trustees_shares: List[List[TrusteeSharePerKey | None]] = [[None] * params.num_leaves for _ in range(params.num_parties)]
 
+    merkle_tree, composite_public_key = build_merkle_tree(public_keys)
+
+    prf_keys: List[bytes] = [secrets.token_bytes(32) for _ in range(params.num_parties)]
+
+    # Compute the shares and common reference value
+    for key_id, secret_key in enumerate(secret_keys):
+        path: List[bytes] = get_auth_path(merkle_tree, key_id)
+        randomizer: bytes = os.urandom(params.digest_size_bytes)
+        chk: List[bytes] = []
+
+        chk_shares: List[bytes] = []
+        randomizer_shares: List[bytes] = []
+        path_shares: List[List[bytes]] = []
+        secret_key_shares: List[List[List[bytes]]] = []
+
+        for index, prf_key in enumerate(prf_keys):
+            chk.append(prf_hmac(prf_key, "AUTH", key_id.to_bytes() + randomizer, params.digest_size_bytes))
+            randomizer_shares.append(prf_hmac(prf_key, "R", key_id.to_bytes(), params.digest_size_bytes))
+
+            chk_share_raw = prf_hmac(prf_key, "CHK", key_id.to_bytes(), params.digest_size_bytes * len(prf_keys))
+            chk_split = []
+
+            for i in range(len(prf_keys)):
+                chk_split.append(chk_share_raw[(i * params.digest_size_bytes):((i+1) * params.digest_size_bytes)])
+
+            chk_shares.append(chk_split)
+
+            # Computing the path shares
+            ps_raw = prf_hmac(prf_key, "PATH", key_id.to_bytes(), sum(map(lambda x: len(x), path)))
+            ps_split = []
+
+            i, j = 0, 0
+            while i < len(ps_raw):
+               l = len(path[j]) 
+               ps_split.append(ps_raw[i:i+l])
+               j += 1
+               i += l
+
+            path_shares.append(ps_split)
+
+            # every row of the secret_key should be the same hence the length of secret_key[0] is sufficient
+            secret_key_shares.append([])
+            for i in range(len(secret_key)):
+                secret_key_shares[index].append([])
+                for j in range(len(secret_key[0])):
+                    secret_key_shares[index][i].append(prf_hmac(prf_key, "CHAIN", key_id.to_bytes() + i.to_bytes() + j.to_bytes(), params.digest_size_bytes))
+
+            randomizer_share = randomizer_shares[-1]
+            randomizer_checker_share = chk_shares[-1]
+            path_share = path_shares[-1]
+            sk_share = secret_key_shares[-1]
+
+            trustees_shares[index][key_id] = TrusteeSharePerKey(
+                randomizer_share=randomizer_share, 
+                randomizer_checker_share=randomizer_checker_share,
+                path_share=path_share,
+                sk_share=sk_share
+            )
+
+        crv_secret_key = secret_key
+
+        for i in range(len(secret_key)):
+            for j in range(len(secret_key[0])):
+                for secret_key_share in secret_key_shares:
+                    crv_secret_key[i][j] = xor(crv_secret_key[i][j], secret_key_share[i][j])
+
+        crv = CommonReferenceValue(
+            randomizer=functools.reduce(lambda x, y: xor(x, y), randomizer_shares, randomizer),
+            path=functools.reduce(lambda x, y: list(map(lambda z: xor(z[0], z[1]), zip(x, y))), path_shares, path),
+            randomizer_checker=functools.reduce(lambda x, y: list(map(lambda z: xor(z[0], z[1]), zip(x, y))), chk_shares, chk),
+            secret_key=crv_secret_key
+        )
+
+        common_reference_values[key_id] = crv
+
+    trustees = []
+
+    for prf_key, shares in zip(prf_keys, trustees_shares):
+        trustees.append(TrusteeShare(
+            prf_key=prf_key,
+            shares=shares
+        ))
+        
+    return DealerOutput(party_id="", composite_public_key=composite_public_key, common_reference_values=common_reference_values, members={i: trustee for i, trustee in enumerate(trustees)}, public_keys_by_key_id=public_keys)
+
+def xor (a: bytes, b: bytes) -> bytes:
+    return bytes([_a ^ _b for _a, _b in zip(a, b)])
+
+def concat (x: List[bytes]) -> bytes:
+    return functools.reduce(lambda a, b: a + b, x)
+
+def sign_1 (share: TrusteeShare, key_id: int, message: bytes) -> Tuple[bytes, List[bytes]]:
+    # These are supposed to be compute in real time but, I am caching them because I just am...
+    return (share.shares[key_id].randomizer_share, share.shares[key_id].randomizer_checker_share)
+
+def auth_sign (share: TrusteeShare, key_id: int, randomizer: bytes, randomizer_checker: bytes) -> bool:
+    return prf_hmac(share.prf_key, "AUTH", key_id.to_bytes() + randomizer, len(randomizer_checker)) == randomizer_checker
+
+def sign_2 (share: TrusteeShare, key_id: int, message: bytes, randomizer: bytes, randomizer_checker: bytes) -> Tuple[List[bytes], List[bytes]]:
+    if auth_sign(share, key_id, randomizer, randomizer_checker):
+        h = hash_message(key_id.to_bytes() + randomizer + message)
+        return (share.shares[key_id].path_share, lamport_sign(h, share.shares[key_id].sk_share))
+    else:
+        return ()
 
 def party_sign_share(
-    party_bundle: PartyBundle,
+    party_bundle: DealerOutput,
     message: bytes,
     key_id: int,
     params: SystemParameters,
-) -> Optional[SignatureShare]:
+) -> Optional[Tuple[bytes, List[bytes], List[bytes]]]:
     """Have one party produce its signing contribution.
 
     Args:
@@ -506,13 +625,30 @@ def party_sign_share(
         A complete implementation should check local policy and ensure the
         ``key_id`` has not been used before.
     """
-    pass
 
+    randomizer = party_bundle.common_reference_values[key_id].randomizer
+    chk = party_bundle.common_reference_values[key_id].randomizer_checker
+
+    for _, trustee_share in party_bundle.members.items():
+        (r_share, chk_share) = sign_1(trustee_share, key_id, message)
+        randomizer = xor(randomizer, r_share)
+        chk = list(map(lambda z: xor(z[0], z[1]), zip(chk, chk_share)))
+
+    h = hash_message(key_id.to_bytes() + randomizer + message)
+    z = lamport_sign(h, party_bundle.common_reference_values[key_id].secret_key)
+    path = party_bundle.common_reference_values[key_id].path
+
+    for i, trustee_share in party_bundle.members.items():
+        (path_share, z_share) = sign_2(trustee_share, key_id, message, randomizer, chk[i])
+        z = list(map(lambda x: xor(x[0], x[1]), zip(z, z_share)))
+        path = list(map(lambda x: xor(x[0], x[1]), zip(path, path_share)))
+
+    return (randomizer, path, z)
 
 def aggregator_sign(
     message: bytes,
     key_id: int,
-    party_bundles: Sequence[PartyBundle],
+    party_bundles: Sequence[Any],
     auth_path: Sequence[bytes],
     params: SystemParameters,
 ) -> ThresholdSignature:
@@ -563,7 +699,7 @@ def verify_threshold_signature(
 def benchmark_minimal_prototype(
     params: SystemParameters,
     messages: Sequence[bytes],
-    dealer_output: DealerOutput,
+    dealer_output: Any,
 ) -> Dict[str, float]:
     """Benchmark the minimal prototype.
 
@@ -580,3 +716,15 @@ def benchmark_minimal_prototype(
         without mixing benchmarking code into the core protocol logic.
     """
     pass
+
+if __name__ == '__main__':
+    key_id = 0
+    params = SystemParameters(num_leaves=8, num_parties=4)
+    output = dealer_setup(params, [])
+    message = b"asdfasdfasdfasdf"
+    (randomizer, path, z) = party_sign_share(output, message, key_id, params)
+
+    digest = hash_message(key_id.to_bytes() + randomizer + message)
+
+    print(lamport_verify(digest, z, output.public_keys_by_key_id[key_id]))
+    print(verify_merkle_path(output.public_keys_by_key_id[key_id], key_id, path, output.composite_public_key))

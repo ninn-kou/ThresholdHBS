@@ -473,8 +473,18 @@ class TrusteeShare:
     prf_key: bytes
     shares: List[TrusteeSharePerKey]
 
+# We should store the used keys as part of the TrusteeShare objects but, I cannot be bothered writing the code in that way currently
+@dataclass
+class DealerOutput:
+    party_id: str
+    composite_public_key: bytes
+    common_reference_values: List[CommonReferenceValue]
+    public_keys_by_key_id: List[List[List[bytes]]]
+    members: Dict[int, TrusteeShare]
+    used_keys: Set[int] = field(default_factory=set)
+
 # This only handles the K-of-K case so far, I need to refactor this to allow for multiple parties of varying sizes from 2...k
-def dealer_setup(params: SystemParameters, party_ids: Sequence[str]):
+def dealer_setup(params: SystemParameters, party_ids: Sequence[str]) -> DealerOutput:
     secret_keys = []
     public_keys = []
 
@@ -485,8 +495,8 @@ def dealer_setup(params: SystemParameters, party_ids: Sequence[str]):
         public_keys.append(public_key)
 
     
-    common_reference_values = [None] * params.num_leaves
-    trustees_shares: List[List[TrusteeSharePerKey]] = [[None] * params.num_leaves for _ in range(params.num_parties)]
+    common_reference_values: List[CommonReferenceValue | None] = [None] * params.num_leaves
+    trustees_shares: List[List[TrusteeSharePerKey | None]] = [[None] * params.num_leaves for _ in range(params.num_parties)]
 
     merkle_tree, composite_public_key = build_merkle_tree(public_keys)
 
@@ -554,7 +564,6 @@ def dealer_setup(params: SystemParameters, party_ids: Sequence[str]):
                 for secret_key_share in secret_key_shares:
                     crv_secret_key[i][j] = xor(crv_secret_key[i][j], secret_key_share[i][j])
 
-
         crv = CommonReferenceValue(
             randomizer=functools.reduce(lambda x, y: xor(x, y), randomizer_shares, randomizer),
             path=functools.reduce(lambda x, y: list(map(lambda z: xor(z[0], z[1]), zip(x, y))), path_shares, path),
@@ -572,7 +581,7 @@ def dealer_setup(params: SystemParameters, party_ids: Sequence[str]):
             shares=shares
         ))
         
-    return (common_reference_values, trustees, [])
+    return DealerOutput(party_id="", composite_public_key=composite_public_key, common_reference_values=common_reference_values, members={i: trustee for i, trustee in enumerate(trustees)}, public_keys_by_key_id=public_keys)
 
 def xor (a: bytes, b: bytes) -> bytes:
     return bytes([_a ^ _b for _a, _b in zip(a, b)])
@@ -587,18 +596,19 @@ def sign_1 (share: TrusteeShare, key_id: int, message: bytes) -> Tuple[bytes, Li
 def auth_sign (share: TrusteeShare, key_id: int, randomizer: bytes, randomizer_checker: bytes) -> bool:
     return prf_hmac(share.prf_key, "AUTH", key_id.to_bytes() + randomizer, len(randomizer_checker)) == randomizer_checker
 
-def sign_2 (share: TrusteeShare, key_id: int, message: bytes, randomizer: bytes, randomizer_checker: bytes) -> Tuple[List[bytes], bytes]:
+def sign_2 (share: TrusteeShare, key_id: int, message: bytes, randomizer: bytes, randomizer_checker: bytes) -> Tuple[List[bytes], List[bytes]]:
     if auth_sign(share, key_id, randomizer, randomizer_checker):
-        return ()
+        h = hash_message(key_id.to_bytes() + randomizer + message)
+        return (share.shares[key_id].path_share, lamport_sign(h, share.shares[key_id].sk_share))
     else:
         return ()
 
 def party_sign_share(
-    party_bundle: Any,
+    party_bundle: DealerOutput,
     message: bytes,
     key_id: int,
     params: SystemParameters,
-) -> Optional[SignatureShare]:
+) -> Optional[Tuple[bytes, List[bytes], List[bytes]]]:
     """Have one party produce its signing contribution.
 
     Args:
@@ -615,8 +625,25 @@ def party_sign_share(
         A complete implementation should check local policy and ensure the
         ``key_id`` has not been used before.
     """
-    pass
 
+    randomizer = party_bundle.common_reference_values[key_id].randomizer
+    chk = party_bundle.common_reference_values[key_id].randomizer_checker
+
+    for _, trustee_share in party_bundle.members.items():
+        (r_share, chk_share) = sign_1(trustee_share, key_id, message)
+        randomizer = xor(randomizer, r_share)
+        chk = list(map(lambda z: xor(z[0], z[1]), zip(chk, chk_share)))
+
+    h = hash_message(key_id.to_bytes() + randomizer + message)
+    z = lamport_sign(h, party_bundle.common_reference_values[key_id].secret_key)
+    path = party_bundle.common_reference_values[key_id].path
+
+    for i, trustee_share in party_bundle.members.items():
+        (path_share, z_share) = sign_2(trustee_share, key_id, message, randomizer, chk[i])
+        z = list(map(lambda x: xor(x[0], x[1]), zip(z, z_share)))
+        path = list(map(lambda x: xor(x[0], x[1]), zip(path, path_share)))
+
+    return (randomizer, path, z)
 
 def aggregator_sign(
     message: bytes,
@@ -689,3 +716,15 @@ def benchmark_minimal_prototype(
         without mixing benchmarking code into the core protocol logic.
     """
     pass
+
+if __name__ == '__main__':
+    key_id = 0
+    params = SystemParameters(num_leaves=8, num_parties=4)
+    output = dealer_setup(params, [])
+    message = b"asdfasdfasdfasdf"
+    (randomizer, path, z) = party_sign_share(output, message, key_id, params)
+
+    digest = hash_message(key_id.to_bytes() + randomizer + message)
+
+    print(lamport_verify(digest, z, output.public_keys_by_key_id[key_id]))
+    print(verify_merkle_path(output.public_keys_by_key_id[key_id], key_id, path, output.composite_public_key))

@@ -5,8 +5,10 @@ import hashlib
 import hmac
 from typing import Iterable, List, Sequence
 
-from .lamport import hash_message
+from .lamport import LamportSignatureScheme
 
+# The digest_size and element_size parameters do not affects the functionality of hash_message
+hash_message = LamportSignatureScheme(digest_size=32, element_size=32).hash_message
 
 def prf_hmac(
     key: bytes,
@@ -80,7 +82,7 @@ def lamport_public_key_from_secret_key(secret_key, hash_name: str = "sha256"):
 
 
 def signing_digest_bytes(message: bytes, key_id: int, randomizer: bytes, digest_size_bytes: int, hash_name: str) -> bytes:
-    digest = hash_message(key_id_to_bytes(key_id) + randomizer + message, hash_name)
+    digest = hash_message(key_id_to_bytes(key_id) + randomizer + message)
     return digest[:digest_size_bytes]
 
 

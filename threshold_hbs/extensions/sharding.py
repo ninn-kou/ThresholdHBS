@@ -60,7 +60,7 @@ def generate_coalitions(
     if party_ids and len(party_ids) != params.num_parties:
         raise ValueError("len(party_ids) must equal params.num_parties when party_ids is provided")
 
-    if threshold_k > len(party_ids):
+    if params.threshold_k > len(party_ids):
         raise ValueError("Threshold value cannot be larger than existing number of parties")
 
 
@@ -98,8 +98,8 @@ def assign_keys_to_all_coalitions(
 
     key_num = params.num_leaves 
     
-    coalition_to_keys = []
-    key_to_coalition = []
+    coalition_to_keys = {group.group_members: group for group in coalition_groups}
+    key_to_coalition = {}
 
     for key_id in range(key_num):
         # use modulo to alternatingly assign keys to coalition groups 
@@ -146,23 +146,15 @@ def select_signing_coalition_and_key(
         -> selected key_id in .assigned_key_ids but not in used_key_ids
     """
 
-    selected_key = None
-
     for group in coalition_groups:
         # find a coalition group that has at least one unused assigned key
-        usable_keys = []
-        if len(group.assigned_key_ids) > len(group.used_key_ids): 
-            for key in group.assigned_key_ids:
-                # find unused key
-                if key not in group.used_key_ids: 
-                    usable_keys.append(key)
-        
-        if len(usable_keys) >= 1:
-            # if usable_keys not empty, select the first key to use
-            selected_key = usable_keys[0]
-            group.used_key_ids.append(selected_key)
+        for key in group.assigned_key_ids:
+            # find unused key
+            if key not in group.used_key_ids: 
+                group.used_key_ids.add(key)
+                return (group, key)
 
-        return [group, selected_key]
+    raise ValueError("No available coalition/key pair remains")
 
 
 def dealer_setup_ext1(      
@@ -351,7 +343,7 @@ def dealer_setup_ext1(
 
     
     dealer_output = DealerOutput(
-        # party_id="",    
+        party_id="",    
         composite_public_key=composite_public_key,
         common_reference_values=common_reference_values,  # type: ignore[arg-type]
         members={trustee.party_id: trustee for trustee in trustees},

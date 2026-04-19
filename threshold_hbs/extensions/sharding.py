@@ -6,8 +6,11 @@ Recommended responsibilities:
 - coalition-aware signing coordinator
 """
 
-from typing import Iterable, List, Sequence
+from typing import Iterable, List, Sequence, Dict
 from itertools import combinations
+import secrets
+import os
+import functools
 
 from ..models import (
     CommonReferenceValue,
@@ -24,6 +27,20 @@ from ..protocol import (
     dealer_setup
 )
 
+from ..lamport import (
+    lamport_generate_keypair
+)
+
+from ..merkle import (
+    build_merkle_tree,
+    get_auth_path
+)
+
+from ..sharing import (
+    key_id_to_bytes,
+    prf_hmac,
+    xor
+)
 
 def generate_coalitions(    
     params: SystemParameters,
@@ -174,27 +191,178 @@ def dealer_setup_ext1(
 
     """
 
-    # call existing dealer for basic setup
-    # dealer_setup_output = dealer_setup(params, party_ids)
-
-    # write my own ext 1 code based on existing dealer_setup -- then go from there ig
-
-
-
+    # sanity check 
+    if party_ids and len(party_ids) != params.num_parties:
+        raise ValueError("len(party_ids) must equal params.num_parties when party_ids is provided")
+    
 
     # coalition group setup
     coalition_groups = generate_coalitions(params, party_ids)
     sharding_state = assign_keys_to_all_coalitions(params, coalition_groups) 
 
+    # based on existing dealer_setup
+    secret_keys = []
+    public_keys = []
+
+    for key_id in range(params.num_leaves):
+        secret_key, public_key = lamport_generate_keypair(
+            params.digest_size_bytes,
+            params.lamport_element_size_bytes,
+            params.hash_name,
+        )
+
+        secret_keys.append(secret_key)
+        public_keys.append(public_key)
+
+    common_reference_values: List[CommonReferenceValue | None] = [None] * params.num_leaves
+
+    merkle_tree, composite_public_key = build_merkle_tree(public_keys, params.hash_name)
+
+    # distribute prf key to parties
+    prf_keys: List[bytes] = [secrets.token_bytes(32) for _ in range(params.num_parties)]
+
+    # create all parties
+    trustees = [] 
+
+    for index, party in enumerate(party_ids): 
+        trustees.append(TrusteeShare(
+            prf_key=prf_keys[index],
+            shares=[],
+            party_id=party,
+            hash_name=params.hash_name
+        ))
+    
+     # Compute the shares and common reference value
+    for key_id, secret_key in enumerate(secret_keys):
+        public_key = public_keys[key_id]
+        key_id_bytes = key_id_to_bytes(key_id)
+        path: List[bytes] = get_auth_path(merkle_tree, key_id)
+        randomizer: bytes = os.urandom(params.digest_size_bytes)
+        chk: List[bytes] = []
+
+        chk_shares: List[List[bytes]] = []
+        randomizer_shares: List[bytes] = []
+        path_shares: List[List[bytes]] = []
+        secret_key_shares: List[List[List[bytes]]] = []
+        public_key_shares: List[List[List[bytes]]] = []
+
+        # find which coalition group does the current key_id belong to
+        assigned_coalition_group = sharding_state.key_to_coalition[key_id]
+
+        # split key values among coalition group members
+        for member in assigned_coalition_group:
+
+            # find corresponding trustee 
+            trustee = next((t for t in trustees if t.party_id == member), None) # realistically would not be None
+            
+            if trustee is None:
+                raise ValueError(f"Trustee not found for party_id {member}")
+            
+            prf_seed = trustee.prf_key
+            chk.append(prf_hmac(prf_seed, "AUTH", key_id_bytes + randomizer, params.digest_size_bytes))
+            randomizer_shares.append(prf_hmac(prf_seed, "R", key_id_bytes, params.digest_size_bytes))
+
+            coalition_size = len(assigned_coalition_group)
+
+            chk_share_raw = prf_hmac(prf_seed, "CHK", key_id_bytes, params.digest_size_bytes * coalition_size)
+            chk_split = []
+
+            for i in range(coalition_size):
+                chk_split.append(chk_share_raw[(i * params.digest_size_bytes):((i + 1) * params.digest_size_bytes)])
+
+            chk_shares.append(chk_split)
+
+            # Computing the path shares
+            ps_raw = prf_hmac(prf_seed, "PATH", key_id_bytes, sum(map(lambda x: len(x), path)))
+            ps_split = []
+          
+            i, j = 0, 0
+            while i < len(ps_raw):
+                l = len(path[j])
+                ps_split.append(ps_raw[i:i + l])
+                j += 1
+                i += l
+
+            path_shares.append(ps_split)
+
+            # secret and public key
+            member_secret_key_share = []
+            member_public_key_share = []
+
+            for i in range(len(secret_key)): 
+                member_secret_key_share.append([])
+                member_public_key_share.append([])
+
+                for j in range(len(secret_key[0])):
+                    member_secret_key_share[i].append(prf_hmac(
+                            prf_seed,
+                            "CHAIN",
+                            key_id_bytes + i.to_bytes(4, "big") + j.to_bytes(2, "big"),
+                            params.lamport_element_size_bytes,
+                        ))
+                    member_public_key_share[i].append(prf_hmac(
+                            prf_seed,
+                            "PUBLIC",
+                            key_id_bytes + i.to_bytes(4, "big") + j.to_bytes(2, "big"),
+                            len(public_key[i][j]),
+                        ))
+            
+            secret_key_shares.append(member_secret_key_share)
+            public_key_shares.append(member_public_key_share)
+
+            randomizer_share = randomizer_shares[-1]
+            randomizer_checker_share = chk_shares[-1]
+            path_share = path_shares[-1]
+            sk_share = secret_key_shares[-1]
+            pk_share = public_key_shares[-1]
+
+            # save it to the trusteeperkey
+            member_share = TrusteeSharePerKey(
+                randomizer_share= randomizer_share,
+                randomizer_checker_share= randomizer_checker_share,
+                path_share= path_share,
+                sk_share= sk_share,
+                pk_share= pk_share,
+                key_id=key_id
+            )
+            
+            # save to trustee 
+            trustee.shares.append(member_share)
+
+        crv_secret_key = [[bytes(value) for value in pair] for pair in secret_key]
+        crv_public_key = [[bytes(value) for value in pair] for pair in public_key]
+
+        for i in range(len(secret_key)):
+            for j in range(len(secret_key[0])):
+                for secret_key_share in secret_key_shares:
+                    crv_secret_key[i][j] = xor(crv_secret_key[i][j], secret_key_share[i][j])
+                for public_key_share in public_key_shares:
+                    crv_public_key[i][j] = xor(crv_public_key[i][j], public_key_share[i][j])
+
+        crv = CommonReferenceValue(
+            randomizer=functools.reduce(lambda x, y: xor(x, y), randomizer_shares, randomizer),
+            path=functools.reduce(lambda x, y: [xor(x_elem, y_elem) for x_elem, y_elem in zip(x, y)], path_shares, path),
+            randomizer_checker=functools.reduce(lambda x, y: [xor(x_elem, y_elem) for x_elem, y_elem in zip(x, y)], chk_shares, chk),
+            secret_key=crv_secret_key,
+            public_key=crv_public_key,
+        )
+
+        common_reference_values[key_id] = crv
+
+    
+    dealer_output = DealerOutput(
+        # party_id="",    
+        composite_public_key=composite_public_key,
+        common_reference_values=common_reference_values,  # type: ignore[arg-type]
+        members={trustee.party_id: trustee for trustee in trustees},
+        public_keys_by_key_id=public_keys,
+    )
+
+    return (dealer_output, sharding_state)   
+
+    # refractor this pls its so long omg
 
 
-
-
-
-
-
-
-    return [dealer_setup_output, sharding_state]    
 
 
 def coalition_signature_scheme(

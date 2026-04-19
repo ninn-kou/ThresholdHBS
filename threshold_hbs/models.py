@@ -93,8 +93,8 @@ class TrusteeSharePerKey:
     sk_share: List[List[bytes]]
     pk_share: List[List[bytes]]
 
-    # should havee? 
-    key_id: int
+    # should have it for ext 1 implementation
+    key_id: int      
 
 # one trustee's stored shares for one key_id
 # should have a key_id unless the position of it in trusteeshare corresponds to its key_id??? 
@@ -104,7 +104,7 @@ class TrusteeSharePerKey:
 @dataclass
 class TrusteeShare:
     prf_key: bytes      # prf seed
-    shares: List[TrusteeSharePerKey]    # this should not exist in the full implementation with will prf right? 
+    shares: List[TrusteeSharePerKey]    # this should not exist in the full implementation with will prf right? --- ig i can keep it??
     hash_name: str = "sha256"
     used_keys: Set[int] = field(default_factory=set)
     current: Optional[Tuple[int, bytes]] = None     # still dk what is this
@@ -120,11 +120,12 @@ class TrusteeShare:
 # In this refactor, we do store them here so that the stateful one-time-key logic stays with each trustee.
 @dataclass
 class DealerOutput:
-    party_id: str       # ? 
+    # party_id: str       # ? 
     composite_public_key: bytes     # global public tree root
     common_reference_values: List[CommonReferenceValue]     # all the leaves in merkle tree
     public_keys_by_key_id: List[List[List[bytes]]]  # key_id, positions, 0/1 at that position
-    members: Dict[int, TrusteeShare]    # think of it as all parties --- mb change it to [str, TrusteeShare]
+    # members: Dict[int, TrusteeShare]    # think of it as all parties --- us
+    members: Dict[str, TrusteeShare]  
     used_keys: Set[int] = field(default_factory=set)
 
 

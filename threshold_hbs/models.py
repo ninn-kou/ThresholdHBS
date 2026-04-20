@@ -38,7 +38,6 @@ class CommonReferenceValue:
 # path - merkle authentication path for that leaf
 # the lists for pk and sk is: outer - position index, inner - 0 and 1 secret value of that position
 
-    
 
 @dataclass
 class SignatureShare:
@@ -110,10 +109,6 @@ class TrusteeShare:
     hash_name: str = "sha256"
     used_keys: Set[int] = field(default_factory=set)
     current: Optional[Tuple[int, bytes]] = None     # still dk what is this
-  
-
-# think about it as partyBundle new version
-
 
 
 # We should store the used keys as part of the TrusteeShare objects but, I cannot be bothered writing the code in that way currently
@@ -124,8 +119,8 @@ class DealerOutput:
     composite_public_key: bytes     # global public tree root
     common_reference_values: List[CommonReferenceValue]     # all the leaves in merkle tree
     public_keys_by_key_id: List[List[List[bytes]]]  # key_id, positions, 0/1 at that position
-    # members: Dict[int, TrusteeShare]    # think of it as all parties --- us
-    members: Dict[str, TrusteeShare]  
+    # members: Dict[int, TrusteeShare]    # think of it as all parties --- 
+    # members: Dict[str, TrusteeShare]  
     used_keys: Set[int] = field(default_factory=set)
 
 
@@ -140,7 +135,6 @@ class CoalitionGroup:
     used_key_ids: Set[int] = field(default_factory=set)
 
 
-# idek do i still need this considering the it is not fully full project yet? idek anymore
 @dataclass
 class ShardingState:
     coalition_map: Dict[tuple[str, ...], CoalitionGroup]   # given coalition group, what keys are assigned to them

@@ -6,7 +6,7 @@ Recommended responsibilities:
 - coalition-aware signing coordinator
 """
 
-from typing import Iterable, List, Sequence, Dict
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 from itertools import combinations
 import secrets
 import os
@@ -24,11 +24,14 @@ from ..models import (
 )
 
 from ..protocol import (
-    dealer_setup
+    KeyReuseError,
+    SigningRefusedError,
+    auth_sign,
 )
 
 from ..lamport import (
-    lamport_generate_keypair
+    lamport_generate_keypair,
+    lamport_sign
 )
 
 from ..merkle import (
@@ -39,6 +42,7 @@ from ..merkle import (
 from ..sharing import (
     key_id_to_bytes,
     prf_hmac,
+    signing_digest_bytes,
     xor
 )
 
@@ -157,6 +161,7 @@ def select_signing_coalition_and_key(
     raise ValueError("No available coalition/key pair remains")
 
 
+# based on dealer_setup - did not change major logic, only the prf related parts
 def dealer_setup_ext1(      
     params: SystemParameters,
     party_ids: Sequence[str]
@@ -355,13 +360,158 @@ def dealer_setup_ext1(
     # refractor this pls its so long omg
 
 
-
-
-def coalition_signature_scheme(
+# exactly the same as base code --- modified included functions that's why its here
+def aggregator_sign_ext1(
     message: bytes,
     key_id: int,
-    coalition: CoalitionGroup,
-    # party_bundles: Dict[str, PartyBundle],        # we changed it to trusteeShare now
+    party_bundles: Sequence[Any] | DealerOutput,
+    auth_path: Optional[Sequence[bytes]] = None,
+    params: Optional[SystemParameters] = None,
+) -> ThresholdSignature:
+
+    if params is None:
+        raise ValueError("params is required")
+
+    if isinstance(party_bundles, DealerOutput):
+        party_bundle = party_bundles
+    elif len(party_bundles) == 1 and isinstance(party_bundles[0], DealerOutput):
+        party_bundle = party_bundles[0]
+    else:
+        raise TypeError(
+            "In the current minimal prototype, party_bundles must be a DealerOutput or a length-1 sequence containing one."
+        )
+
+    result = party_sign_share_ext1(party_bundle, message, key_id, params)
+    if result is None:
+        raise SigningRefusedError("party_sign_share returned None")
+    (randomizer, path, z) = result
+
+    if auth_path is not None and list(auth_path) != list(path):
+        raise ValueError("provided auth_path does not match the reconstructed path")
+
+    lamport_public_key = _reconstruct_lamport_public_key_ext1(party_bundle, key_id)
+
+    return ThresholdSignature(
+        key_id=key_id,
+        randomizer=randomizer,
+        lamport_public_key=lamport_public_key,
+        lamport_signature_values=z,
+        auth_path=path,
+    )
+
+
+# based on base code - same except prf lookup
+def party_sign_share_ext1(
+    party_bundle: DealerOutput,
+    message: bytes,
+    key_id: int,
+    params: SystemParameters,
+) -> Optional[Tuple[bytes, List[bytes], List[bytes]]]:
+    
+    if key_id in party_bundle.used_keys:
+        raise KeyReuseError(f"key_id {key_id} has already been used by this party bundle")
+    party_bundle.used_keys.add(key_id)
+
+    randomizer = party_bundle.common_reference_values[key_id].randomizer
+    chk = list(party_bundle.common_reference_values[key_id].randomizer_checker)
+
+    # simplified as the key_id is not needed in this case - same logic here
+    for trustee_share in party_bundle.members.values():
+        (r_share, chk_share) = sign_1_ext1(trustee_share, key_id, message)
+        randomizer = xor(randomizer, r_share)
+        chk = list(map(lambda z: xor(z[0], z[1]), zip(chk, chk_share)))
+
+    h = signing_digest_bytes(message, key_id, randomizer, params.digest_size_bytes, params.hash_name)
+    z = lamport_sign(h, party_bundle.common_reference_values[key_id].secret_key)
+    path = list(party_bundle.common_reference_values[key_id].path)
+
+    # as members: [str, TrusteeShare]
+    for i, trustee_share in enumerate(party_bundle.members.values()):
+        (path_share, z_share) = sign_2_ext1(trustee_share, key_id, message, randomizer, chk[i])
+        z = list(map(lambda x: xor(x[0], x[1]), zip(z, z_share)))
+        path = list(map(lambda x: xor(x[0], x[1]), zip(path, path_share)))
+
+    return (randomizer, path, z)
+
+# based on base code, changed the way it fetches for common_reference_values, since not every party is assigned to this key_id
+def _reconstruct_lamport_public_key_ext1(party_bundle: DealerOutput, key_id: int) -> List[List[bytes]]:
+    lamport_public_key = [[bytes(value) for value in pair] for pair in party_bundle.common_reference_values[key_id].public_key]
+
+    for trustee_share in party_bundle.members.values():
+        # find corresponding key share in trustee
+        trustee_key_share = None
+        for share in trustee_share.shares: 
+            if share.key_id == key_id:
+                trustee_key_share = share
+                break
+        
+        if trustee_key_share is None:
+            raise SigningRefusedError(f"Trustee has no share for key_id {key_id}")
+        
+        lamport_public_key = [
+            [xor(lamport_public_key[i][j], trustee_key_share.pk_share[i][j]) for j in range(len(lamport_public_key[i]))]
+            for i in range(len(lamport_public_key))
+        ]
+
+    return lamport_public_key
+
+
+# based on base code, changed the return part as again shares not include all keys for ext1
+def sign_1_ext1(share: TrusteeShare, key_id: int, message: bytes) -> Tuple[bytes, List[bytes]]:
+
+    if key_id in share.used_keys:
+        raise KeyReuseError(f"key_id {key_id} has already been used by this trustee")
+    if share.current is not None:
+        raise SigningRefusedError("trustee already has a pending signing request")
+
+    share.used_keys.add(key_id)
+    share.current = (key_id, message)
+
+    # changed
+    trustee_share = None
+    for term in share.shares:
+        if term.key_id == key_id:
+            trustee_share = term
+            break
+    
+    if trustee_share is None: 
+        raise SigningRefusedError(f"Trustee has no share for key_id {key_id}")
+    
+   
+    return (trustee_share.randomizer_share, trustee_share.randomizer_checker_share)
+
+# 
+def sign_2_ext1(share: TrusteeShare, key_id: int, message: bytes, randomizer: bytes, randomizer_checker: bytes) -> Tuple[List[bytes], List[bytes]]:
+    if share.current is None:
+        raise SigningRefusedError("trustee has no pending signing request")
+
+    current_key_id, current_message = share.current
+    share.current = None
+
+    if current_key_id != key_id or current_message != message:
+        raise SigningRefusedError("mismatched second-round request")
+
+    if auth_sign(share, key_id, randomizer, randomizer_checker):
+        # changed -- same change as sign_1
+        trustee_share = None
+        for term in share.shares:
+            if term.key_id == key_id:
+                trustee_share = term
+                break
+
+        if trustee_share is None: 
+            raise SigningRefusedError(f"Trustee has no share for key_id {key_id}")
+    
+        digest_size_bytes = len(trustee_share.sk_share) // 8
+        h = signing_digest_bytes(message, key_id, randomizer, digest_size_bytes, share.hash_name)
+        return (trustee_share.path_share, lamport_sign(h, trustee_share.sk_share))
+    else:
+        raise SigningRefusedError("trustee refused to sign because the randomizer check failed")
+
+
+# wrapper for aggregator_sign
+def coalition_signature_scheme(
+    message: bytes,
     dealer_output: DealerOutput,
     params: SystemParameters,
     coalition_groups: List[CoalitionGroup]  #? 
@@ -390,10 +540,40 @@ def coalition_signature_scheme(
 
     """
 
-    # select coalition group and key
-    selected_group, selected_key = select_signing_coalition_and_key(coalition_groups)
+    # select valid coalition group and key 
+    selected_group, key_id = select_signing_coalition_and_key(coalition_groups)
+
+    # filter existing dealer_output to only contain members from selected coalition group
+    group_members = {}
+
+    for name, trustee in dealer_output.members.items():
+        if name in selected_group.group_members: 
+            group_members[name] = trustee
+
+    # reassign
+    new_dealer_output = DealerOutput(
+        party_id=dealer_output.party_id,    # i still dk why it exist tbh -- can we take it out
+        composite_public_key=dealer_output.composite_public_key,
+        common_reference_values=dealer_output.common_reference_values,
+        public_keys_by_key_id=dealer_output.public_keys_by_key_id,
+        members=group_members,
+        used_keys=dealer_output.used_keys
+    )   
+
+    # update used key into dealer_output as well - not sure if its needed tho cuz its tracked in coalition group already
+    new_dealer_output.used_keys.add(key_id)
+
+    # signing - do i even have auth path? 
+    threshold_signature = aggregator_sign_ext1(message, key_id, new_dealer_output, None, params)
+
+    return threshold_signature
 
 
 
 
-    pass
+
+def ext1_benchmark() ->  Dict[str, float]:
+
+
+
+    pass 

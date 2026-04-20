@@ -157,6 +157,9 @@ class Extension1Tests(unittest.TestCase):
         with self.assertRaises(ValueError):
             select_signing_coalition_and_key(coalition_groups)
 
+        # actually test this further - the exact test so i can see whats inside
+
+
 
     def test_dealer_setup_ext1(self) -> None:
         params = self.make_params()

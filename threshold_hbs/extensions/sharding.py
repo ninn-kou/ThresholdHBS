@@ -6,6 +6,7 @@ Recommended responsibilities:
 - coalition-aware signing coordinator
 """
 
+import time
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 from itertools import combinations
 import secrets
@@ -27,6 +28,7 @@ from ..protocol import (
     KeyReuseError,
     SigningRefusedError,
     auth_sign,
+    verify_threshold_signature,
 )
 
 from ..lamport import (
@@ -40,6 +42,8 @@ from ..merkle import (
 )
 
 from ..sharing import (
+    estimate_crv_size_bytes,
+    estimate_signature_size_bytes,
     key_id_to_bytes,
     prf_hmac,
     signing_digest_bytes,
@@ -560,8 +564,44 @@ def coalition_signature_scheme(
     return threshold_signature
 
 
-def ext1_benchmark() ->  Dict[str, float]:
+# based on base code --- idk if we need this tbh 
+def benchmark_ext1(
+    params: SystemParameters,
+    messages: Sequence[bytes],
+    dealer_output: DealerOutput,
+    sharding_state: ShardingState
+) -> Dict[str, float]:
+    
+    if len(messages) > params.num_leaves:
+        raise ValueError("Need at least as many leaves as messages to benchmark")
 
+    sign_start = time.perf_counter()
+    signatures = [
+        # only changed aggregator_sign to coalition_signature_scheme
+        coalition_signature_scheme(message, dealer_output, params, sharding_state)
+        for message in enumerate(messages)
+    ]
+    sign_total_s = time.perf_counter() - sign_start
+    
+    # verification 
+    verify_start = time.perf_counter()
+    verified = 0
+    for message, signature in zip(messages, signatures):
+        if verify_threshold_signature(message, signature, dealer_output.composite_public_key, params):
+            verified += 1
+    verify_total_s = time.perf_counter() - verify_start
 
+    average_signature_size_bytes = 0.0
+    if signatures:
+        average_signature_size_bytes = sum(estimate_signature_size_bytes(signature) for signature in signatures) / len(signatures)
 
-    pass 
+    return {
+        "sign_total_s": sign_total_s,
+        "verify_total_s": verify_total_s,
+        "sign_avg_s": sign_total_s / len(messages) if messages else 0.0,
+        "verify_avg_s": verify_total_s / len(messages) if messages else 0.0,
+        "average_signature_size_bytes": float(average_signature_size_bytes),
+        "crv_size_bytes": float(estimate_crv_size_bytes(dealer_output.common_reference_values)),
+        "signatures_verified": float(verified),
+    }
+

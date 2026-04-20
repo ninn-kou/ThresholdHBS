@@ -54,3 +54,8 @@ proc generate_keypair (n: int, w: int): WinternitzKeyPair {. exportc, dynlib .} 
     privateKey: cast[ptr UncheckedArray[byte]](rawPrivateKey),
     publicKey: cast[ptr UncheckedArray[byte]](rawPublicKey),
   )
+
+type WinternitzSignature = distinct ptr UncheckedArray[byte]
+
+proc sign (message: seq[byte], secret_key: seq[seq[byte]], n: int, w: int): WinternitzSignature {. exportc, dynlib .} =
+  discard

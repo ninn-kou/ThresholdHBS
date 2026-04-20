@@ -28,6 +28,6 @@ before build:
   let outFile = libName & "." & outputExt
 
   # Build the library with --app:lib
-  let cmd = "nim " & backend & " --app:lib --noMain -o:" & outFile & " src/winternitz.nim"
+  let cmd = "nim " & backend & " --mm:arc --app:lib --noMain -o:" & outFile & " src/winternitz.nim"
   echo "Building library: ", cmd
   exec(cmd)

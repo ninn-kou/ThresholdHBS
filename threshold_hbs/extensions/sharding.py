@@ -108,20 +108,10 @@ def assign_keys_to_all_coalitions(
     for key_id in range(key_num):
         # use modulo to alternatingly assign keys to coalition groups 
         group_index = key_id % len(coalition_groups)    
-        # add assigned key_id
         selected_group = coalition_groups[group_index]
-        selected_group.assigned_key_ids.append(key_id)   
         dict_key = selected_group.group_members
 
-        # check if the group already exists in the dictionary
-        if dict_key in coalition_to_keys:
-            coalition_to_keys[dict_key].assigned_key_ids.append(key_id)
-            
-        else: # does not exist, then add it in
-            coalition_to_keys[dict_key] = selected_group
-            coalition_to_keys[dict_key].assigned_key_ids.append(key_id)
-
-        # construct ShardingState
+        selected_group.assigned_key_ids.append(key_id)
         # map key to their corresponding coalition group
         key_to_coalition[key_id] = dict_key
 
@@ -514,7 +504,7 @@ def coalition_signature_scheme(
     message: bytes,
     dealer_output: DealerOutput,
     params: SystemParameters,
-    coalition_groups: List[CoalitionGroup]  #? 
+    sharding_state: ShardingState
 ) -> ThresholdSignature:    
 
     """
@@ -539,6 +529,8 @@ def coalition_signature_scheme(
         - Attach result with Merkle authentication path to produce the final thresholdSignature
 
     """
+    # extract coalition groups
+    coalition_groups = list(sharding_state.coalition_map.values())
 
     # select valid coalition group and key 
     selected_group, key_id = select_signing_coalition_and_key(coalition_groups)
@@ -561,15 +553,11 @@ def coalition_signature_scheme(
     )   
 
     # update used key into dealer_output as well - not sure if its needed tho cuz its tracked in coalition group already
-    new_dealer_output.used_keys.add(key_id)
+    # new_dealer_output.used_keys.add(key_id)
 
-    # signing - do i even have auth path? 
     threshold_signature = aggregator_sign_ext1(message, key_id, new_dealer_output, None, params)
 
     return threshold_signature
-
-
-
 
 
 def ext1_benchmark() ->  Dict[str, float]:

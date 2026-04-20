@@ -120,7 +120,7 @@ class DealerOutput:
     common_reference_values: List[CommonReferenceValue]     # all the leaves in merkle tree
     public_keys_by_key_id: List[List[List[bytes]]]  # key_id, positions, 0/1 at that position
     # members: Dict[int, TrusteeShare]    # think of it as all parties --- 
-    # members: Dict[str, TrusteeShare]  
+    members: Dict[str, TrusteeShare]  
     used_keys: Set[int] = field(default_factory=set)
 
 

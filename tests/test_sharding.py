@@ -4,9 +4,11 @@ import unittest
 
 from threshold_hbs import (
     SystemParameters,
+    verify_threshold_signature,
 )
 
 from threshold_hbs.extensions.sharding import (
+    coalition_signature_scheme,
     generate_coalitions,
     assign_keys_to_all_coalitions,
     select_signing_coalition_and_key,
@@ -29,6 +31,26 @@ class Extension1Tests(unittest.TestCase):
         params = self.make_params()
         coalition_groups = generate_coalitions(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
         self.assertEqual(len(coalition_groups), 10)
+    
+
+    def test_coalition_generation_exact(self) -> None:
+        params = self.make_params()
+        coalition_groups = generate_coalitions(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
+        actual = [group.group_members for group in coalition_groups]
+        expected = [
+            ('p0', 'p1', 'p2'),
+            ('p0', 'p1', 'p3'),
+            ('p0', 'p1', 'p4'),
+            ('p0', 'p2', 'p3'),
+            ('p0', 'p2', 'p4'),
+            ('p0', 'p3', 'p4'),
+            ('p1', 'p2', 'p3'),
+            ('p1', 'p2', 'p4'),
+            ('p1', 'p3', 'p4'),
+            ('p2', 'p3', 'p4')
+        ]
+        self.assertEqual(actual, expected)
+
 
     def test_coalition_generation_error_wrong_parties(self) -> None:
         params = self.make_params()
@@ -47,7 +69,7 @@ class Extension1Tests(unittest.TestCase):
             generate_coalitions(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
 
     # assign_keys_to_all_coalitions
-    def test_key_assignment_to_coalition(self) -> None:
+    def test_assign_keys_to_all_coalitions(self) -> None:
         params = self.make_params()
         coalition_groups = generate_coalitions(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
         shardingState = assign_keys_to_all_coalitions(params, coalition_groups)
@@ -68,22 +90,15 @@ class Extension1Tests(unittest.TestCase):
             }
         )
 
-        # how do i test the rest of the two?
-    def test_key_assignment_to_coalition_1(self) -> None:
-        params = SystemParameters(
-            num_parties=5,
-            num_leaves=15,
-            threshold_k=3,
-            digest_size_bytes=8,
-            lamport_element_size_bytes=16,
-        )
+    def test_assign_keys_to_all_coalitions_1(self) -> None:
+        params = self.make_params(num_leaves=15)
         coalition_groups = generate_coalitions(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
-        shardingState = assign_keys_to_all_coalitions(params, coalition_groups)
+        sharding_state = assign_keys_to_all_coalitions(params, coalition_groups)
         self.assertEqual(len(coalition_groups), 10)
-        self.assertEqual(len(shardingState.coalition_map), 10)
-        self.assertEqual(len(shardingState.key_to_coalition), 15)
+        self.assertEqual(len(sharding_state.coalition_map), 10)
+        self.assertEqual(len(sharding_state.key_to_coalition), 15)
         self.assertEqual(
-            shardingState.key_to_coalition, 
+            sharding_state.key_to_coalition, 
             {
                 0: ('p0', 'p1', 'p2'),
                 1: ('p0', 'p1', 'p3'),
@@ -103,34 +118,58 @@ class Extension1Tests(unittest.TestCase):
             }
         )
 
-    def test_key_assignment_to_coalition_2(self) -> None:
-        params = SystemParameters(
-            num_parties=5,
-            num_leaves=15,
-            threshold_k=3,
-            digest_size_bytes=8,
-            lamport_element_size_bytes=16,
-        )
+    def test_assign_keys_to_all_coalitions_2(self) -> None:
+        params = self.make_params(num_leaves=15)
         coalition_groups = generate_coalitions(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
-        shardingState = assign_keys_to_all_coalitions(params, coalition_groups)
+        sharding_state = assign_keys_to_all_coalitions(params, coalition_groups)
 
-        self.assertEqual(len(shardingState.key_to_coalition), params.num_leaves)
+        self.assertEqual(len(sharding_state.key_to_coalition), params.num_leaves)
 
-        for key_id, coalition in shardingState.key_to_coalition.items():
-            self.assertIn(coalition, shardingState.coalition_map)
+        for key_id, coalition in sharding_state.key_to_coalition.items():
+            self.assertIn(coalition, sharding_state.coalition_map)
 
-        for key_id, coalition in shardingState.key_to_coalition.items():
-            self.assertIn(key_id, shardingState.coalition_map[coalition].assigned_key_ids)
+        for key_id, coalition in sharding_state.key_to_coalition.items():
+            self.assertIn(key_id, sharding_state.coalition_map[coalition].assigned_key_ids)
+
+
+    def test_assign_keys_to_all_coalitions_exact_1(self) -> None:
+        params = self.make_params(num_leaves=15)
+        coalition_groups = generate_coalitions(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
+        sharding_state = assign_keys_to_all_coalitions(params, coalition_groups)
+
+        self.assertEqual(
+            sharding_state.coalition_map[('p0', 'p1', 'p2')].assigned_key_ids, [0, 10]
+        )
+
+        self.assertEqual(
+            sharding_state.coalition_map[('p1', 'p2', 'p4')].assigned_key_ids, [7]
+        )
+
+
+    def test_assign_keys_to_all_coalitions_exact_2(self) -> None:
+        params = self.make_params()
+        coalition_groups = generate_coalitions(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
+        sharding_state = assign_keys_to_all_coalitions(params, coalition_groups)
+
+        self.assertEqual(
+            sharding_state.coalition_map[('p0', 'p1', 'p2')].assigned_key_ids, [0]
+        )
+
+        self.assertEqual(
+            sharding_state.coalition_map[('p1', 'p2', 'p4')].assigned_key_ids, [7]
+        )
+
+        self.assertEqual(
+            sharding_state.coalition_map[('p1', 'p3', 'p4')].assigned_key_ids, []
+        )
+
+        self.assertEqual(
+            sharding_state.coalition_map[('p2', 'p3', 'p4')].assigned_key_ids, []
+        )
 
 
     def test_select_signing_coalition_and_key(self) -> None:
-        params = SystemParameters(
-            num_parties=5,
-            num_leaves=15,
-            threshold_k=3,
-            digest_size_bytes=8,
-            lamport_element_size_bytes=16,
-        )
+        params = self.make_params(num_leaves=15)
         coalition_groups = generate_coalitions(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
         assign_keys_to_all_coalitions(params, coalition_groups)
         coalition_group, key = select_signing_coalition_and_key(coalition_groups)
@@ -141,13 +180,7 @@ class Extension1Tests(unittest.TestCase):
 
     
     def test_select_signing_coalition_and_key_exhaust(self) -> None:
-        params = SystemParameters(
-            num_parties=5,
-            num_leaves=15,
-            threshold_k=3,
-            digest_size_bytes=8,
-            lamport_element_size_bytes=16,
-        )
+        params = self.make_params(num_leaves=15)
         coalition_groups = generate_coalitions(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
         assign_keys_to_all_coalitions(params, coalition_groups)
 
@@ -157,7 +190,30 @@ class Extension1Tests(unittest.TestCase):
         with self.assertRaises(ValueError):
             select_signing_coalition_and_key(coalition_groups)
 
-        # actually test this further - the exact test so i can see whats inside
+
+    def test_select_signing_coalition_and_key_exact(self) -> None:
+        params = self.make_params(num_leaves=15)
+        coalition_groups = generate_coalitions(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
+        assign_keys_to_all_coalitions(params, coalition_groups)
+
+        # default first one
+        group, key_id = select_signing_coalition_and_key(coalition_groups)
+        self.assertEqual(group.group_members, ('p0', 'p1', 'p2'))
+        self.assertEqual(key_id, 0)
+        self.assertIn(0, group.used_key_ids)
+
+        # second
+        group, key_id = select_signing_coalition_and_key(coalition_groups)
+        self.assertEqual(group.group_members, ('p0', 'p1', 'p2'))
+        self.assertEqual(key_id, 10)
+        self.assertIn(0, group.used_key_ids)
+        self.assertIn(10, group.used_key_ids)
+
+        # third
+        group, key_id = select_signing_coalition_and_key(coalition_groups)
+        self.assertEqual(group.group_members, ('p0', 'p1', 'p3'))
+        self.assertEqual(key_id, 1)
+        self.assertIn(1, group.used_key_ids)
 
 
 
@@ -180,6 +236,46 @@ class Extension1Tests(unittest.TestCase):
                 else: 
                     self.assertFalse(has_share, f"{party_id} should not have share for key {key_id}")
 
+
+    def test_dealer_setup_ext1_exact(self) -> None:
+        params = self.make_params()
+        dealer_output, sharding_state = dealer_setup_ext1(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
+
+        # check key id in TrusteeShareKeys
+        self.assertEqual(sharding_state.key_to_coalition[0], ('p0', 'p1', 'p2'))
+        self.assertTrue(any(s.key_id == 0 for s in dealer_output.members['p0'].shares))
+        self.assertTrue(any(s.key_id == 0 for s in dealer_output.members['p1'].shares))
+        self.assertTrue(any(s.key_id == 0 for s in dealer_output.members['p2'].shares))
+        self.assertFalse(any(s.key_id == 0 for s in dealer_output.members['p3'].shares))
+        self.assertFalse(any(s.key_id == 0 for s in dealer_output.members['p4'].shares))
+
+
+    def test_coalition_signature_scheme(self) -> None:
+        message_1 = b"hello"
+        message_2 = b"hello?"
+        params = self.make_params()
+        dealer_output, sharding_state = dealer_setup_ext1(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
+        threshold_signature = coalition_signature_scheme(message_1, dealer_output, params, sharding_state)
+        # true
+        self.assertTrue(verify_threshold_signature(message_1, threshold_signature, dealer_output.composite_public_key, params))
+        # false - as the signature is valid for message_1
+        self.assertFalse(verify_threshold_signature(message_2, threshold_signature, dealer_output.composite_public_key, params))
+
+
+    def test_coalition_signature_scheme_multiple_and_exhaust(self) -> None:
+        params = self.make_params(num_leaves=5)
+        dealer_output, sharding_state = dealer_setup_ext1(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
+
+        # multiple signatures
+        for i in range(5):
+            message = f"hello-{i}".encode()
+            threshold_signature = coalition_signature_scheme(message, dealer_output, params, sharding_state)
+            self.assertTrue(verify_threshold_signature(message, threshold_signature, dealer_output.composite_public_key, params))
+
+        # exhaust check
+        with self.assertRaises(ValueError):
+            coalition_signature_scheme(b"extra message", dealer_output, params, sharding_state)
+    
 
 
 if __name__ == "__main__":

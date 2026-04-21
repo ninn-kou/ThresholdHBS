@@ -55,7 +55,41 @@ proc generate_keypair (n: int, w: int): WinternitzKeyPair {. exportc, dynlib .} 
     publicKey: cast[ptr UncheckedArray[byte]](rawPublicKey),
   )
 
+# This is where we encounter some fuckery
+# We are NOT assuming that w is cleanly divisible in this array; where is the challenge there?
+proc split (message: seq[byte], w: int): seq[byte] =
+  result = @[]
+  if w < 8:
+    for i in countup(0, message.len * 8, w):
+      let current_byte_index = i div 8
+      let current_bit = i mod 8
+
+      let requires_next_byte = w < (8 - current_bit)
+
+      if requires_next_byte:
+        let remainder = (8 - (current_bit + w))
+        assert remainder < 0
+
+        let mask_1 = byte(255 shr current_bit)
+        let mask_2 = byte(255 shl (8 + remainder))
+
+        let value1 = (message[current_byte_index] and mask_1) shl abs(remainder)
+        let value2 = (message[current_byte_index + 1] and mask_2) shr (8 + remainder)
+        result.add(value1 and value2)
+      else:
+        let remainder = (8 - (current_bit + w))
+        let mask = byte((255 shr current_bit) and (255 shl remainder))
+        let value = (message[current_byte_index] and mask) shr remainder
+        result.add(value)
+  else:
+    discard
+
+
 type WinternitzSignature = distinct ptr UncheckedArray[byte]
 
 proc sign (message: seq[byte], secret_key: seq[seq[byte]], n: int, w: int): WinternitzSignature {. exportc, dynlib .} =
+  let a = n div w
+  let pow_w = 1 shl w
+
+  var c_sum = a * (pow_w - 1)
   discard

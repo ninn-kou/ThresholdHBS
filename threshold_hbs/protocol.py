@@ -7,7 +7,7 @@ import time
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from .abstractions.signature_scheme import SignatureScheme
-from .lamport import LamportSignatureScheme 
+from .extensions.winternitz import WinternitzSignatureScheme
 from .merkle import MerkleTree, build_merkle_tree, get_auth_path, verify_merkle_path
 from .models import (
     CommonReferenceValue,
@@ -44,9 +44,10 @@ signature_scheme = None
 def get_signature_scheme(params: SystemParameters) -> SignatureScheme:
     global signature_scheme
     if signature_scheme is None:
-        signature_scheme = LamportSignatureScheme(
+        signature_scheme = WinternitzSignatureScheme(
             params.digest_size_bytes, 
-            params.lamport_element_size_bytes
+            params.lamport_element_size_bytes,
+            w=4,
         )
     
     return signature_scheme
@@ -127,6 +128,7 @@ def dealer_setup(params: SystemParameters, party_ids: Sequence[str]) -> DealerOu
                             params.lamport_element_size_bytes,
                         )
                     )
+                for j in range(len(public_key[0])):
                     public_key_shares[index][i].append(
                         prf_hmac(
                             prf_key,
@@ -157,6 +159,9 @@ def dealer_setup(params: SystemParameters, party_ids: Sequence[str]) -> DealerOu
             for j in range(len(secret_key[0])):
                 for secret_key_share in secret_key_shares:
                     crv_secret_key[i][j] = xor(crv_secret_key[i][j], secret_key_share[i][j])
+
+        for i in range(len(public_key)):
+            for j in range(len(public_key[0])):
                 for public_key_share in public_key_shares:
                     crv_public_key[i][j] = xor(crv_public_key[i][j], public_key_share[i][j])
 
@@ -204,7 +209,7 @@ def auth_sign(share: TrusteeShare, key_id: int, randomizer: bytes, randomizer_ch
     return prf_hmac(share.prf_key, "AUTH", key_id_to_bytes(key_id) + randomizer, len(randomizer_checker)) == randomizer_checker
 
 
-def sign_2(share: TrusteeShare, key_id: int, message: bytes, randomizer: bytes, randomizer_checker: bytes, sign: Any) -> Tuple[List[bytes], List[bytes]]:
+def sign_2(share: TrusteeShare, key_id: int, message: bytes, randomizer: bytes, randomizer_checker: bytes, sign: Any, digest_size_bytes: int) -> Tuple[List[bytes], List[bytes]]:
     if share.current is None:
         raise SigningRefusedError("trustee has no pending signing request")
 
@@ -215,7 +220,6 @@ def sign_2(share: TrusteeShare, key_id: int, message: bytes, randomizer: bytes, 
         raise SigningRefusedError("mismatched second-round request")
 
     if auth_sign(share, key_id, randomizer, randomizer_checker):
-        digest_size_bytes = len(share.shares[key_id].sk_share) // 8
         h = signing_digest_bytes(message, key_id, randomizer, digest_size_bytes, share.hash_name)
         return (share.shares[key_id].path_share, sign(h, share.shares[key_id].sk_share))
     else:
@@ -262,7 +266,7 @@ def party_sign_share(
     path = list(party_bundle.common_reference_values[key_id].path)
 
     for i, trustee_share in party_bundle.members.items():
-        (path_share, z_share) = sign_2(trustee_share, key_id, message, randomizer, chk[i], get_signature_scheme(params).sign)
+        (path_share, z_share) = sign_2(trustee_share, key_id, message, randomizer, chk[i], get_signature_scheme(params).sign, params.digest_size_bytes)
         z = list(map(lambda x: xor(x[0], x[1]), zip(z, z_share)))
         path = list(map(lambda x: xor(x[0], x[1]), zip(path, path_share)))
 

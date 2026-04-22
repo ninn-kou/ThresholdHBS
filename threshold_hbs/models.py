@@ -3,6 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
+from threshold_hbs.abstractions.signature_scheme import SignatureScheme
+from threshold_hbs.signatures.winternitz import WinternitzSignatureScheme
+
 
 @dataclass
 class SystemParameters:
@@ -16,12 +19,14 @@ class SystemParameters:
         lamport_element_size_bytes: Byte length of each Lamport secret element.
     """
     # ext 1
+    signature_scheme: SignatureScheme 
     num_parties: int
     num_leaves: int
     threshold_k: int | None = None 
     hash_name: str = "sha256"
     digest_size_bytes: int = 32
     lamport_element_size_bytes: int = 32
+
 
 
 

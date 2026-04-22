@@ -22,6 +22,7 @@ class PrototypeCompatibilityTests(unittest.TestCase):
     def make_params(self, num_leaves: int = 8) -> SystemParameters:
         return SystemParameters(
             num_parties=4,
+            threshold_k=2,
             num_leaves=num_leaves,
             digest_size_bytes=32,
             lamport_element_size_bytes=32,

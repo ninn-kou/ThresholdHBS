@@ -28,7 +28,6 @@ from ..protocol import (
     aggregator_sign,
     auth_sign,
     verify_threshold_signature,
-    get_signature_scheme,
 )
 
 from ..merkle import (

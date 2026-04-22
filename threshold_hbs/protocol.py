@@ -40,18 +40,7 @@ from .sharing import (
 
 
 
-signature_scheme = None
 
-def get_signature_scheme(params: SystemParameters) -> SignatureScheme:
-    global signature_scheme
-    if signature_scheme is None:
-        signature_scheme = WinternitzSignatureScheme(
-            params.digest_size_bytes, 
-            params.lamport_element_size_bytes,
-            w=4,
-        )
-    
-    return signature_scheme
 
 # This only handles the K-of-K case so far, I need to refactor this to allow for multiple parties of varying sizes from 2...k
 # The module layout now separates primitives from protocol logic, but the public function names are intentionally kept.
@@ -94,7 +83,7 @@ def dealer_setup(
     secret_keys = []
     public_keys = []
 
-    scheme = get_signature_scheme(params)
+    scheme = params.signature_scheme
 
     for key_id in range(params.num_leaves):
         secret_key, public_key = scheme.generate_keypair()
@@ -303,7 +292,7 @@ def sign_2(share: TrusteeShare, key_id: int, message: bytes, randomizer: bytes, 
     
         digest_size_bytes = params.digest_size_bytes if params else len(trustee_share.sk_share) // 8
         h = signing_digest_bytes(message, key_id, randomizer, digest_size_bytes, share.hash_name)
-        return (trustee_share.path_share, get_signature_scheme(params).sign(h, trustee_share.sk_share))
+        return (trustee_share.path_share, params.signature_scheme.sign(h, trustee_share.sk_share))
     else:
         raise SigningRefusedError("trustee refused to sign because the randomizer check failed")
 
@@ -329,7 +318,7 @@ def party_sign_share(
         chk = list(map(lambda z: xor(z[0], z[1]), zip(chk, chk_share)))
 
     h = signing_digest_bytes(message, key_id, randomizer, params.digest_size_bytes, params.hash_name)
-    z = get_signature_scheme(params).sign(h, party_bundle.common_reference_values[key_id].secret_key)
+    z = params.signature_scheme.sign(h, party_bundle.common_reference_values[key_id].secret_key)
     path = list(party_bundle.common_reference_values[key_id].path)
 
     # as members: [str, TrusteeShare]
@@ -425,7 +414,7 @@ def verify_threshold_signature(
     """
     digest = signing_digest_bytes(message, signature.key_id, signature.randomizer, params.digest_size_bytes, params.hash_name)
 
-    lamport_ok = get_signature_scheme(params).verify(
+    lamport_ok = params.signature_scheme.verify(
         digest,
         signature.lamport_signature_values,
         signature.lamport_public_key,

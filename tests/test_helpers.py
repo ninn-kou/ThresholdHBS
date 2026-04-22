@@ -17,6 +17,7 @@ def make_params(
     digest_size_bytes: int = 32,
     lamport_element_size_bytes: int = 32,
     signature_scheme: SignatureSchemeEnum = SignatureSchemeEnum.WINTERNITZ,
+    batching: int = 3
 ) -> SystemParameters:
 
     if signature_scheme == SignatureSchemeEnum.WINTERNITZ:

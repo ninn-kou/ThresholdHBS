@@ -26,6 +26,7 @@ class SystemParameters:
     hash_name: str = "sha256"
     digest_size_bytes: int = 32
     lamport_element_size_bytes: int = 32
+    batching: int = 3
 
 
 

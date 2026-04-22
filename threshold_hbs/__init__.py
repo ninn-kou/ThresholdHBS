@@ -37,6 +37,10 @@ from .protocol import (
     select_signing_coalition_and_key,
 )
 
+from .SystemController import (
+    SystemController
+)
+
 __all__ = [
     "CommonReferenceValue",
     "DealerOutput",
@@ -64,4 +68,5 @@ __all__ = [
     "sign_1",
     "sign_2",
     "verify_threshold_signature",
+    "SystemController"
 ]

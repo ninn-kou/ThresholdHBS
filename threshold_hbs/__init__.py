@@ -15,10 +15,7 @@ from .merkle import (
     verify_merkle_path,
 )
 from .lamport import (
-    hash_message,
-    lamport_generate_keypair,
-    lamport_sign,
-    lamport_verify,
+    LamportSignatureScheme
 )
 from .sharing import (
     concat,
@@ -48,13 +45,10 @@ __all__ = [
     "TrusteeSharePerKey",
     "MerkleNode",
     "MerkleTree",
+    "LamportSignatureScheme",
     "build_merkle_tree",
     "get_auth_path",
     "verify_merkle_path",
-    "hash_message",
-    "lamport_generate_keypair",
-    "lamport_sign",
-    "lamport_verify",
     "concat",
     "prf_hmac",
     "xor",

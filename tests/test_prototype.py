@@ -12,15 +12,20 @@ from threshold_hbs import (
 )
 
 from threshold_hbs.models import ThresholdSignature
+import threshold_hbs.protocol as protocol
 
 
 class PrototypeCompatibilityTests(unittest.TestCase):
+    def setUp(self) -> None:
+        # Reset the cached signature scheme between tests
+        protocol.signature_scheme = None
+
     def make_params(self, num_leaves: int = 8) -> SystemParameters:
         return SystemParameters(
             num_parties=4,
             num_leaves=num_leaves,
-            digest_size_bytes=8,
-            lamport_element_size_bytes=16,
+            digest_size_bytes=32,
+            lamport_element_size_bytes=32,
         )
 
     def test_end_to_end_signature_verifies(self) -> None:

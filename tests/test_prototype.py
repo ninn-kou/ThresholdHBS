@@ -6,7 +6,6 @@ from threshold_hbs import (
     KeyReuseError,
     SystemParameters,
     aggregator_sign,
-    benchmark_minimal_prototype,
     dealer_setup,
     verify_threshold_signature,
 )
@@ -69,25 +68,7 @@ class PrototypeCompatibilityTests(unittest.TestCase):
         signature = aggregator_sign(b"leaf-two", 2, output, None, params)
         self.assertTrue(verify_threshold_signature(b"leaf-two", signature, output.composite_public_key, params))
 
-    def test_benchmark_output(self) -> None:
-        params = self.make_params(num_leaves=4)
-        output = dealer_setup(params, [])
-        results = benchmark_minimal_prototype(params, [b"m0", b"m1", b"m2"], output)
-        self.assertEqual(
-            set(results.keys()),
-            {
-                "sign_total_s",
-                "verify_total_s",
-                "sign_avg_s",
-                "verify_avg_s",
-                "average_signature_size_bytes",
-                "crv_size_bytes",
-                "signatures_verified",
-            },
-        )
-        self.assertEqual(results["signatures_verified"], 3.0)
-        self.assertGreater(results["average_signature_size_bytes"], 0.0)
-        self.assertGreater(results["crv_size_bytes"], 0.0)
+   
 
 
 if __name__ == "__main__":

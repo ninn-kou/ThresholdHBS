@@ -5,6 +5,7 @@ import unittest
 from threshold_hbs import (
     SystemParameters,
     verify_threshold_signature,
+    dealer_setup
 )
 
 from threshold_hbs.extensions.sharding import (
@@ -12,7 +13,6 @@ from threshold_hbs.extensions.sharding import (
     generate_coalitions,
     assign_keys_to_all_coalitions,
     select_signing_coalition_and_key,
-    dealer_setup_ext1
 ) 
 
 import threshold_hbs.protocol as protocol
@@ -222,9 +222,9 @@ class Extension1Tests(unittest.TestCase):
 
 
 
-    def test_dealer_setup_ext1(self) -> None:
+    def test_dealer_setup(self) -> None:
         params = self.make_params()
-        dealer_output, sharding_state = dealer_setup_ext1(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
+        dealer_output, sharding_state = dealer_setup(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
 
         self.assertEqual(len(dealer_output.members), 5)
         self.assertEqual(len(sharding_state.key_to_coalition), params.num_leaves)
@@ -242,9 +242,9 @@ class Extension1Tests(unittest.TestCase):
                     self.assertFalse(has_share, f"{party_id} should not have share for key {key_id}")
 
 
-    def test_dealer_setup_ext1_exact(self) -> None:
+    def test_dealer_setup_exact(self) -> None:
         params = self.make_params()
-        dealer_output, sharding_state = dealer_setup_ext1(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
+        dealer_output, sharding_state = dealer_setup(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
 
         # check key id in TrusteeShareKeys
         self.assertEqual(sharding_state.key_to_coalition[0], ('p0', 'p1', 'p2'))
@@ -259,7 +259,7 @@ class Extension1Tests(unittest.TestCase):
         message_1 = b"hello"
         message_2 = b"hello?"
         params = self.make_params()
-        dealer_output, sharding_state = dealer_setup_ext1(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
+        dealer_output, sharding_state = dealer_setup(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
         threshold_signature = coalition_signature_scheme(message_1, dealer_output, params, sharding_state)
         # true
         self.assertTrue(verify_threshold_signature(message_1, threshold_signature, dealer_output.composite_public_key, params))
@@ -269,7 +269,7 @@ class Extension1Tests(unittest.TestCase):
 
     def test_coalition_signature_scheme_multiple_and_exhaust(self) -> None:
         params = self.make_params(num_leaves=5)
-        dealer_output, sharding_state = dealer_setup_ext1(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
+        dealer_output, sharding_state = dealer_setup(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
 
         # multiple signatures
         for i in range(5):

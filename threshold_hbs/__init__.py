@@ -14,7 +14,7 @@ from .merkle import (
     get_auth_path,
     verify_merkle_path,
 )
-from .lamport import (
+from .signatures.lamport import (
     LamportSignatureScheme
 )
 from .sharing import (
@@ -27,7 +27,6 @@ from .protocol import (
     SigningRefusedError,
     aggregator_sign,
     auth_sign,
-    benchmark_minimal_prototype,
     dealer_setup,
     party_sign_share,
     sign_1,

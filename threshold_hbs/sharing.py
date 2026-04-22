@@ -5,7 +5,7 @@ import hashlib
 import hmac
 from typing import Iterable, List, Sequence
 
-from .lamport import LamportSignatureScheme
+from .signatures.lamport import LamportSignatureScheme
 
 # The digest_size and element_size parameters do not affects the functionality of hash_message
 hash_message = LamportSignatureScheme(digest_size=32, element_size=32).hash_message

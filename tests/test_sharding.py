@@ -6,15 +6,13 @@ from tests.test_helpers import SignatureSchemeEnum, make_params
 from threshold_hbs import (
     SystemParameters,
     verify_threshold_signature,
-    dealer_setup
-)
-
-from threshold_hbs.extensions.sharding import (
+    dealer_setup,
     coalition_signature_scheme,
     generate_coalitions,
     assign_keys_to_all_coalitions,
     select_signing_coalition_and_key,
-) 
+)
+
 
 import threshold_hbs.protocol as protocol
 from threshold_hbs.signatures.lamport import LamportSignatureScheme

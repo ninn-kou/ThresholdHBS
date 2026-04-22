@@ -8,9 +8,8 @@ from .models import (
     TrusteeSharePerKey,
 )
 from .merkle import (
-    MerkleNode,
-    MerkleTree,
-    build_merkle_tree,
+    build_merkle_tree_signatures,
+    build_merkle_tree_messages,
     get_auth_path,
     verify_merkle_path,
 )
@@ -32,6 +31,10 @@ from .protocol import (
     sign_1,
     sign_2,
     verify_threshold_signature,
+    coalition_signature_scheme,
+    generate_coalitions,
+    assign_keys_to_all_coalitions,
+    select_signing_coalition_and_key,
 )
 
 __all__ = [

@@ -152,3 +152,18 @@ class BatchSignature:
     message_index: int
     message_auth_path: List[bytes]
     threshold_signature: ThresholdSignature
+
+@dataclass
+class UpperTreeSignature:
+    key_id: int
+    bottom_composite_pk: bytes
+    public_key: bytes
+    randomizer: bytes
+    signature_values: List[bytes]
+    auth_path: List[bytes]
+
+@dataclass
+class HyperTreeSignature:
+    batch_signature: BatchSignature
+    upper_tree_signature: UpperTreeSignature
+

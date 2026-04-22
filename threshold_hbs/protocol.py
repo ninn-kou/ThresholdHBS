@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import hashlib
 from itertools import combinations
 import os
 import secrets
@@ -12,8 +13,9 @@ from threshold_hbs.exceptions import KeyReuseError, SigningRefusedError
 
 from .abstractions.signature_scheme import SignatureScheme
 from .signatures.winternitz import WinternitzSignatureScheme
-from .merkle import MerkleTree, build_merkle_tree, get_auth_path, verify_merkle_path
+from .merkle import MerkleTree, build_merkle_tree_messages, build_merkle_tree_signatures, get_auth_path, verify_merkle_path
 from .models import (
+    BatchSignature,
     CoalitionGroup,
     CommonReferenceValue,
     DealerOutput,
@@ -93,7 +95,7 @@ def dealer_setup(
 
     common_reference_values: List[CommonReferenceValue | None] = [None] * params.num_leaves
 
-    merkle_tree, composite_public_key = build_merkle_tree(public_keys, params.hash_name)
+    merkle_tree, composite_public_key = build_merkle_tree_signatures(public_keys, params.hash_name)
 
     # distribute prf key to parties
     prf_keys: List[bytes] = [secrets.token_bytes(32) for _ in range(params.num_parties)]
@@ -577,7 +579,60 @@ def select_signing_coalition_and_key(
     raise ValueError("No available coalition/key pair remains")
 
 
+def batch_coalition_signature_scheme(
+    messages: List[bytes],
+    dealer_output: DealerOutput,
+    params: SystemParameters,
+    sharding_state: ShardingState
+) -> List[BatchSignature]:
+    """
+    Extension 3: Buffers messages into a Merkle tree, signs the root via the 
+    threshold scheme, and returns a BatchSignature for each message.
+    """
+    if not messages:
+        raise ValueError("Must provide at least one message to batch sign.")
 
+    message_tree, message_root = build_merkle_tree_messages(messages, params.hash_name)
+
+    root_threshold_signature = coalition_signature_scheme(
+        message_root, dealer_output, params, sharding_state
+    )
+
+    batch_signatures = []
+    for i in range(len(messages)):
+        path = get_auth_path(message_tree, i)
+        batch_signatures.append(BatchSignature(
+            message_index=i,
+            message_auth_path=path,
+            threshold_signature=root_threshold_signature
+        ))
+        
+    return batch_signatures
+
+def verify_batch_signature(
+    message: bytes,
+    batch_signatures: BatchSignature,
+    root_public_key: bytes,
+    params: SystemParameters
+) -> bool:
+    current_digest = hashlib.new(params.hash_name, message).digest()
+    pk_id = batch_signatures.message_index
+    
+    for sibling in batch_signatures.message_auth_path:
+        if pk_id % 2 == 0:
+            current_digest = MerkleTree.hash_digests(params.hash_name, current_digest, sibling)
+        else:
+            current_digest = MerkleTree.hash_digests(params.hash_name, sibling, current_digest)
+        pk_id //= 2
+        
+    reconstructed_message_root = current_digest
+
+    return verify_threshold_signature(
+        message=reconstructed_message_root, 
+        signature=batch_signatures.threshold_signature, 
+        root_public_key=root_public_key, 
+        params=params
+    )
 
 # wrapper for aggregator_sign
 def coalition_signature_scheme(

@@ -146,5 +146,8 @@ class ShardingState:
     key_to_coalition: Dict[int, tuple[str, ...]]    # given key, which is the corresponding coalition group
 
 
-
-
+@dataclass
+class BatchSignature:
+    message_index: int
+    message_auth_path: List[bytes]
+    threshold_signature: ThresholdSignature

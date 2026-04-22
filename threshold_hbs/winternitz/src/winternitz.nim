@@ -113,7 +113,7 @@ proc to_bytes (value: int64, c: int): seq[byte] =
   for i in 0..<c:
     if i < 8:
       let shift = i * 8;
-      result.add(byte(((0xFF shr shift) and value) shr shift))
+      result.add(byte(((0xFF shl shift) and value) shr shift))
     else:
       result.add(byte(0))
 

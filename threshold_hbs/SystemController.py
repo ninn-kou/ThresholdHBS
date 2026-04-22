@@ -37,7 +37,7 @@ class SystemController:
        bottom_root = dealer_output.composite_public_key
 
        index = self.next_index
-       self.index += 1
+       self.next_index += 1
        sk = self.secret_keys[index]
 
        randomizer = os.urandom(self.params.digest_size_bytes)
@@ -66,7 +66,7 @@ class SystemController:
        self.cur_bottom_root = bottom_root
 
     def queue_message(self, message: bytes) -> bool:
-        if len(self.messages) > self.params.batching:
+        if len(self.messages) >= self.params.batching:
             return False
         else :
             self.messages.append(message)

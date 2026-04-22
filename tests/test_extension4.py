@@ -18,7 +18,7 @@ from threshold_hbs.signatures.winternitz import WinternitzSignatureScheme
 class Extension4Tests(unittest.TestCase):
     # generate_coalitions
     def setUp(self):
-        params = make_params(batching=1)
+        params = make_params(batching=1, num_parties=2, threshold_k=2)
         self.system_controller = SystemController(params, ['Alice', 'Bob'])
 
     def test1(self):

@@ -39,4 +39,5 @@ def make_params(
         digest_size_bytes=digest_size_bytes,
         lamport_element_size_bytes=lamport_element_size_bytes,
         signature_scheme=scheme,
+        batching=batching
     )

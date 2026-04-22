@@ -156,7 +156,7 @@ class BatchSignature:
 @dataclass
 class UpperTreeSignature:
     key_id: int
-    bottom_composite_pk: bytes
+    bottom_root: bytes
     public_key: bytes
     randomizer: bytes
     signature_values: List[bytes]

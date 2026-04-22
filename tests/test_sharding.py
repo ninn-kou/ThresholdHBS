@@ -15,15 +15,20 @@ from threshold_hbs.extensions.sharding import (
     dealer_setup_ext1
 ) 
 
+import threshold_hbs.protocol as protocol
+
 
 class Extension1Tests(unittest.TestCase):
+    def setUp(self) -> None:
+        protocol.signature_scheme = None
+
     def make_params(self, num_leaves: int = 8) -> SystemParameters:
         return SystemParameters(
             num_parties=5,
             num_leaves=num_leaves,
             threshold_k=3,
-            digest_size_bytes=8,
-            lamport_element_size_bytes=16,
+            digest_size_bytes=32,
+            lamport_element_size_bytes=32,
         )
 
     # generate_coalitions
@@ -62,8 +67,8 @@ class Extension1Tests(unittest.TestCase):
             num_parties=5,
             num_leaves=8,
             threshold_k=6,
-            digest_size_bytes=8,
-            lamport_element_size_bytes=16,
+            digest_size_bytes=32,
+            lamport_element_size_bytes=32,
         )
         with self.assertRaises(ValueError):
             generate_coalitions(params, ['p0', 'p1', 'p2', 'p3', 'p4'])

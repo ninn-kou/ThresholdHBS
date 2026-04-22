@@ -29,11 +29,7 @@ from ..protocol import (
     SigningRefusedError,
     auth_sign,
     verify_threshold_signature,
-)
-
-from ..lamport import (
-    lamport_generate_keypair,
-    lamport_sign
+    get_signature_scheme,
 )
 
 from ..merkle import (
@@ -195,12 +191,10 @@ def dealer_setup_ext1(
     secret_keys = []
     public_keys = []
 
+    scheme = get_signature_scheme(params)
+
     for key_id in range(params.num_leaves):
-        secret_key, public_key = lamport_generate_keypair(
-            params.digest_size_bytes,
-            params.lamport_element_size_bytes,
-            params.hash_name,
-        )
+        secret_key, public_key = scheme.generate_keypair()
 
         secret_keys.append(secret_key)
         public_keys.append(public_key)
@@ -291,6 +285,8 @@ def dealer_setup_ext1(
                             key_id_bytes + i.to_bytes(4, "big") + j.to_bytes(2, "big"),
                             params.lamport_element_size_bytes,
                         ))
+
+                for j in range(len(public_key[0])):
                     member_public_key_share[i].append(prf_hmac(
                             prf_seed,
                             "PUBLIC",
@@ -327,6 +323,7 @@ def dealer_setup_ext1(
             for j in range(len(secret_key[0])):
                 for secret_key_share in secret_key_shares:
                     crv_secret_key[i][j] = xor(crv_secret_key[i][j], secret_key_share[i][j])
+            for j in range(len(public_key[0])):
                 for public_key_share in public_key_shares:
                     crv_public_key[i][j] = xor(crv_public_key[i][j], public_key_share[i][j])
 
@@ -416,12 +413,12 @@ def party_sign_share_ext1(
         chk = list(map(lambda z: xor(z[0], z[1]), zip(chk, chk_share)))
 
     h = signing_digest_bytes(message, key_id, randomizer, params.digest_size_bytes, params.hash_name)
-    z = lamport_sign(h, party_bundle.common_reference_values[key_id].secret_key)
+    z = get_signature_scheme(params).sign(h, party_bundle.common_reference_values[key_id].secret_key)
     path = list(party_bundle.common_reference_values[key_id].path)
 
     # as members: [str, TrusteeShare]
     for i, trustee_share in enumerate(party_bundle.members.values()):
-        (path_share, z_share) = sign_2_ext1(trustee_share, key_id, message, randomizer, chk[i])
+        (path_share, z_share) = sign_2_ext1(trustee_share, key_id, message, randomizer, chk[i], params)
         z = list(map(lambda x: xor(x[0], x[1]), zip(z, z_share)))
         path = list(map(lambda x: xor(x[0], x[1]), zip(path, path_share)))
 
@@ -475,7 +472,7 @@ def sign_1_ext1(share: TrusteeShare, key_id: int, message: bytes) -> Tuple[bytes
     return (trustee_share.randomizer_share, trustee_share.randomizer_checker_share)
 
 # 
-def sign_2_ext1(share: TrusteeShare, key_id: int, message: bytes, randomizer: bytes, randomizer_checker: bytes) -> Tuple[List[bytes], List[bytes]]:
+def sign_2_ext1(share: TrusteeShare, key_id: int, message: bytes, randomizer: bytes, randomizer_checker: bytes, params: SystemParameters = None) -> Tuple[List[bytes], List[bytes]]:
     if share.current is None:
         raise SigningRefusedError("trustee has no pending signing request")
 
@@ -496,9 +493,9 @@ def sign_2_ext1(share: TrusteeShare, key_id: int, message: bytes, randomizer: by
         if trustee_share is None: 
             raise SigningRefusedError(f"Trustee has no share for key_id {key_id}")
     
-        digest_size_bytes = len(trustee_share.sk_share) // 8
+        digest_size_bytes = params.digest_size_bytes if params else len(trustee_share.sk_share) // 8
         h = signing_digest_bytes(message, key_id, randomizer, digest_size_bytes, share.hash_name)
-        return (trustee_share.path_share, lamport_sign(h, trustee_share.sk_share))
+        return (trustee_share.path_share, get_signature_scheme(params).sign(h, trustee_share.sk_share))
     else:
         raise SigningRefusedError("trustee refused to sign because the randomizer check failed")
 

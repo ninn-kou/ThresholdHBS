@@ -87,3 +87,13 @@ class LamportSignatureScheme(SignatureScheme):
                 if self.hash_message(revealed) != expected_pk:
                     return False
         return True
+
+
+def lamport_generate_keypair(digest_size, element_size, hash_name="sha256"):
+    scheme = LamportSignatureScheme(digest_size, element_size, hash_name)
+    return scheme.generate_keypair()
+
+
+def lamport_sign(message, secret_key, hash_name="sha256"):
+    scheme = LamportSignatureScheme(len(message), 0, hash_name)
+    return scheme.sign(message, secret_key)

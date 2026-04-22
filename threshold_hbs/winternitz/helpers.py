@@ -1,10 +1,13 @@
 import ctypes
 import os
+import sys
 from ctypes import Structure, POINTER, c_ubyte, c_int64
 from math import ceil, log2
 from typing import List, Tuple
 
-_lib = ctypes.CDLL(os.path.join(os.path.dirname(__file__), "winternitz.dll"), winmode=0)
+_ext = ".dll" if sys.platform == "win32" else ".dylib" if sys.platform == "darwin" else ".so"
+_path = os.path.join(os.path.dirname(__file__), "winternitz" + _ext)
+_lib = ctypes.CDLL(_path, winmode=0) if sys.platform == "win32" else ctypes.CDLL(_path)
 
 class WinternitzKeyPair(Structure):
     _fields_ = [

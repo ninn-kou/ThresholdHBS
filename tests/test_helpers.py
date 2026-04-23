@@ -7,9 +7,9 @@ from threshold_hbs.signatures.winternitz import WinternitzSignatureScheme
 
 class SignatureSchemeEnum(Enum):
     WINTERNITZ = "Winternitz"
-    LAMPORT = "Lamport"  
-    
-    
+    LAMPORT = "Lamport"
+
+
 def make_params(
     num_parties: int = 5,
     num_leaves: int = 8,

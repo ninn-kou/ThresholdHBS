@@ -37,6 +37,20 @@ from .protocol import (
     select_signing_coalition_and_key,
 )
 
+from .peer_to_peer import (
+    ApprovalPolicy,
+    HelperStringServer,
+    NoApprovedCoalitionError,
+    PeerApproval,
+    PeerCoordinationError,
+    PeerMessageProposal,
+    PeerSigningDecision,
+    PeerToPeerSignatureResult,
+    collect_peer_approvals,
+    peer_to_peer_sign,
+    select_peer_coalition_and_key,
+)
+
 from .SystemController import (
     SystemController
 )
@@ -68,5 +82,16 @@ __all__ = [
     "sign_1",
     "sign_2",
     "verify_threshold_signature",
+    "ApprovalPolicy",
+    "HelperStringServer",
+    "NoApprovedCoalitionError",
+    "PeerApproval",
+    "PeerCoordinationError",
+    "PeerMessageProposal",
+    "PeerSigningDecision",
+    "PeerToPeerSignatureResult",
+    "collect_peer_approvals",
+    "peer_to_peer_sign",
+    "select_peer_coalition_and_key",
     "SystemController"
 ]

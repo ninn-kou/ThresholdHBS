@@ -8,13 +8,12 @@ from .models import (
     TrusteeSharePerKey,
 )
 from .merkle import (
-    MerkleNode,
-    MerkleTree,
-    build_merkle_tree,
+    build_merkle_tree_signatures,
+    build_merkle_tree_messages,
     get_auth_path,
     verify_merkle_path,
 )
-from .lamport import (
+from .signatures.lamport import (
     LamportSignatureScheme
 )
 from .sharing import (
@@ -27,12 +26,19 @@ from .protocol import (
     SigningRefusedError,
     aggregator_sign,
     auth_sign,
-    benchmark_minimal_prototype,
     dealer_setup,
     party_sign_share,
     sign_1,
     sign_2,
     verify_threshold_signature,
+    coalition_signature_scheme,
+    generate_coalitions,
+    assign_keys_to_all_coalitions,
+    select_signing_coalition_and_key,
+)
+
+from .SystemController import (
+    SystemController
 )
 
 __all__ = [
@@ -62,4 +68,5 @@ __all__ = [
     "sign_1",
     "sign_2",
     "verify_threshold_signature",
+    "SystemController"
 ]

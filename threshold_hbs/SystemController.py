@@ -1,5 +1,5 @@
 import os
-from typing import Dict, List, Sequence, Tuple
+from typing import List, Sequence, Tuple
 from threshold_hbs.merkle import build_merkle_tree_signatures, get_auth_path, verify_merkle_path
 from threshold_hbs.models import HyperTreeSignature, SystemParameters, UpperTreeSignature
 from threshold_hbs.protocol import batch_coalition_signature_scheme, dealer_setup, verify_batch_signature

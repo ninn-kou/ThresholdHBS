@@ -2,16 +2,12 @@ from __future__ import annotations
 
 import unittest
 
-from tests.test_helpers import SignatureSchemeEnum, make_params
+from tests.test_helpers import make_params
 from threshold_hbs import (
     dealer_setup,
 )
 
-from threshold_hbs.merkle import build_merkle_tree_messages
 import threshold_hbs.protocol as protocol
-from threshold_hbs.signatures.lamport import LamportSignatureScheme
-from threshold_hbs.signatures.winternitz import WinternitzSignatureScheme
-
 
 class Extension3Tests(unittest.TestCase):
     # generate_coalitions

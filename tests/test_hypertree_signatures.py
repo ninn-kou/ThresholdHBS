@@ -12,7 +12,7 @@ class Extension4Tests(unittest.TestCase):
         params = make_params(batching=1, num_parties=2, threshold_k=2)
         self.system_controller = SystemController(params, ['Alice', 'Bob'])
 
-    def test1(self):
+    def test_basic_test(self):
         self.system_controller.queue_message(b"abcd")
         msg, sig = self.system_controller.sign_pending_batch()[0]
 
@@ -42,5 +42,20 @@ class Extension4Tests(unittest.TestCase):
         msg, sig = self.system_controller.sign_pending_batch()[0]
 
         self.assertFalse(self.system_controller.verify_message(b"altered_message", sig))
+        
+    def test_cross_signature_rejection(self):
+        self.system_controller.queue_message(b"message_A")
+        msg_a, sig_a = self.system_controller.sign_pending_batch()[0]
+
+        self.system_controller.queue_message(b"message_B")
+        msg_b, sig_b = self.system_controller.sign_pending_batch()[0]
+        self.assertFalse(self.system_controller.verify_message(msg_a, sig_b))
+        
+    def test_upper_tree_exhaustion(self):
+        num_leaves = self.system_controller.params.num_leaves
+        
+        with self.assertRaises(Exception):
+            for _ in range(num_leaves + 1):
+                self.system_controller._create_bottom_tree()
 if __name__ == "__main__":
     unittest.main()

@@ -3,5 +3,5 @@
   "batching": 4,
   "num_parties": 3,
   "threshold_k": 2,
-  "num_leaves": 2
+  "num_leaves": 3
 }

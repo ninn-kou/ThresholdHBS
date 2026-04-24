@@ -31,7 +31,7 @@ class SystemController:
 
     def _create_bottom_tree(self):
        if self.next_index >= self.params.num_leaves:
-           pass
+            raise RuntimeError("upper tree is exahusted")
        
        dealer_output, sharding_state = dealer_setup(self.params, self.party_ids)
        bottom_root = dealer_output.composite_public_key
@@ -116,6 +116,18 @@ class SystemController:
         if len(self.messages) != self.params.batching:
             return None
 
+        total_used_keys = sum(
+            len(group.used_key_ids) 
+            for group in self.cur_sharding_state.coalition_map.values()
+        )
+        
+        if total_used_keys >= self.params.num_leaves:
+            try:
+                self._create_bottom_tree()
+            except RuntimeError as e:
+                print(f"{e}")
+                return None
+        
         batch_signatures = batch_coalition_signature_scheme(
             messages=self.messages, 
             dealer_output=self.cur_dealer_output, 

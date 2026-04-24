@@ -27,8 +27,15 @@ class Extension4Tests(unittest.TestCase):
 
         self.assertTrue(self.system_controller.verify_message(msg, sig))
 
-    
-
+    def test_verification_with_identical_message(self):
+        self.system_controller.queue_message(b"abcd")
+        msg1, sig1 = self.system_controller.sign_pending_batch()[0]
+        
+        self.system_controller.queue_message(b"abcd")
+        msg2, sig2 = self.system_controller.sign_pending_batch()[0]
+        
+        self.assertTrue(self.system_controller.verify_message(msg2, sig1))
+        print(sig1, sig2)
 
 if __name__ == "__main__":
     unittest.main()

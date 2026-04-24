@@ -1,13 +1,12 @@
 from __future__ import annotations
 from itertools import combinations
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, List, Optional, Sequence, Tuple
 from threshold_hbs.exceptions import KeyReuseError, SigningRefusedError
 
 import functools
 import hashlib
 import os
 import secrets
-import time
 
 from .merkle import MerkleTree, build_merkle_tree_messages, build_merkle_tree_signatures, get_auth_path, verify_merkle_path
 from .models import (
@@ -22,8 +21,6 @@ from .models import (
     TrusteeSharePerKey,
 )
 from .sharing import (
-    estimate_crv_size_bytes,
-    estimate_signature_size_bytes,
     key_id_to_bytes,
     prf_hmac,
     signing_digest_bytes,
@@ -420,55 +417,6 @@ def verify_threshold_signature(
         root_public_key,
         params.hash_name,
     )
-
-
-def benchmark(
-    params: SystemParameters,
-    messages: Sequence[bytes],
-    dealer_output: DealerOutput,
-    sharding_state: ShardingState
-) -> Dict[str, float]:
-    
-    """
-    Benchmarks coalition signing and verification performance.
-
-    Returns timing results, average signature size, CRV storage size,
-    and the number of successfully verified signatures.
-    """
-    
-    if len(messages) > params.num_leaves:
-        raise ValueError("Need at least as many leaves as messages to benchmark")
-
-    sign_start = time.perf_counter()
-    signatures = [
-        # generate signatures using the coalition-based signing scheme
-        coalition_signature_scheme(message, dealer_output, params, sharding_state)
-        for message in enumerate(messages)
-    ]
-    sign_total_s = time.perf_counter() - sign_start
-    
-    # verify each generated signature against the Merkle root public key
-    verify_start = time.perf_counter()
-    verified = 0
-    for message, signature in zip(messages, signatures):
-        if verify_threshold_signature(message, signature, dealer_output.composite_public_key, params):
-            verified += 1
-    verify_total_s = time.perf_counter() - verify_start
-
-    # compute average signature size across all generated signatures
-    average_signature_size_bytes = 0.0
-    if signatures:
-        average_signature_size_bytes = sum(estimate_signature_size_bytes(signature) for signature in signatures) / len(signatures)
-
-    return {
-        "sign_total_s": sign_total_s,
-        "verify_total_s": verify_total_s,
-        "sign_avg_s": sign_total_s / len(messages) if messages else 0.0,
-        "verify_avg_s": verify_total_s / len(messages) if messages else 0.0,
-        "average_signature_size_bytes": float(average_signature_size_bytes),
-        "crv_size_bytes": float(estimate_crv_size_bytes(dealer_output.common_reference_values)),
-        "signatures_verified": float(verified),
-    }
     
 # Generate every possible coalition 
 def generate_coalitions(    

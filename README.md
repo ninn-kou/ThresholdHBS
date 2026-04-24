@@ -33,6 +33,12 @@ Run unit tests with:
 python -m unittest discover -s tests -v
 ```
 
+Run automated benchmarks with:
+
+```bash
+python3 -m unittest automated_benchmarks.py -v
+```
+
 ### Extensions
 
 #### Extension 1: k-of-n via k-of-k subtrees

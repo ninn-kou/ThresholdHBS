@@ -1,12 +1,46 @@
 ## COMP6453-Team-Project
 
-### Code Structures
 
-- `threshold_hbs/lamport.py` for Lamport primitives
-- `threshold_hbs/merkle.py` for Merkle tree logic
-- `threshold_hbs/sharing.py` for XOR/PRF helpers
-- `threshold_hbs/protocol.py` for dealer/trustee/aggregator logic
-- `threshold_hbs/models.py` for dataclasses
+### Project Structure
+
+```text
+threshold_hbs/
+├── abstractions/  
+│   ├── _init_.py_               
+│   ├── merkle_tree.py   
+│   ├── singature_scheme.py   
+├── extensions/           
+├── signatures/ 
+│   ├── lamport.py               
+│   ├── winternitz.py            
+├── winternitz/            
+│   ├── src/               
+│   ├── helpers.py         
+│   └── winternitz.*       
+├── models.py              
+├── protocol.py            
+├── sharing.py             
+├── merkle.py              
+├── peer_to_peer.py        
+├── SystemController.py   
+└── exceptions.py         
+```
+
+File Descriptions:  
+- **SystemController.py**: High-level controller that manages batching, signing flow, and integration of the hypertree-style structure.structure
+- **sharing.py**: Utility functions for the threshold hash-based signature scheme, for size estimation, derivation of keys, and XOR logic. 
+- **protocol.py**: Provides utility functions for PRF-based share generation, XOR reconstruction, key encoding, signing and verification, as well as Extension 1 logic for coalition group generation and key assignment. It also implements batch signing and verification for Extension 3.
+- **peer_to_peer.py**: Implements peer-to-peer coordination logic, including message proposals, approvals, and party interaction during the distributed signing workflow for Extension 2.
+- **models.py**: Defines core data structures and dataclasses
+- **merkle.py**: Implements Merkle tree construction, root computation, and authentication path generation and verification.
+- **exceptions.py**: Defines custom exceptions for error handling, such as key reuse and signing failures.
+
+- **helpers.py**: Provides helper functions for Winternitz one-time signatures, including key generation, signing, and verification.
+- **lamport.py**: Defines the `LamportSignatureScheme` class, which implements the Lmaport one-time signature scheme with methods for keypair generation, signing, and verification
+- **winternitz.py**: Defines the `WinternitzSignatureScheme` class, which implements the Winternitz one-time signature scheme with methods for keypair generation, signing and verification
+
+- **merkle_tree.py**: Defines the `MerkleNode`, `MerkleTree`, `MerkleTreeSignatures`, and `MerkleTreeMessages` classes, providing utilities for Merkle tree construction, root digest computation, authentication path generation, and node hashing.
+- **signature_scheme.py**: 
 
 ### Initial Demo & Testing
 

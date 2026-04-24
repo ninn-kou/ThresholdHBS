@@ -21,9 +21,11 @@ def build_merkle_tree_signatures(leaf_public_keys: Sequence[Any], hash_name: str
     tree = MerkleTreeSignatures(leaf_public_keys, hash_name)
     return tree, tree.root_digest
 
+
 def build_merkle_tree_messages(messages: List[bytes], hash_name: str = "sha256") -> Tuple[MerkleTree, bytes]:
     tree = MerkleTreeMessages(messages, hash_name)
     return tree, tree.root_digest
+
 
 def get_auth_path(tree: MerkleTree, key_id: int) -> List[bytes]:
     """Extract the Merkle authentication path for one leaf.

@@ -1,9 +1,7 @@
 from __future__ import annotations
-
-import hashlib
 from typing import Any, List, Sequence, Tuple
-
 from threshold_hbs.abstractions.merkle_tree import MerkleTree, MerkleTreeMessages, MerkleTreeSignatures
+import hashlib
 
 def build_merkle_tree_signatures(leaf_public_keys: Sequence[Any], hash_name: str = "sha256") -> Tuple[MerkleTree, bytes]:
     """Build a Merkle tree over Lamport public keys.
@@ -75,6 +73,7 @@ def verify_merkle_path(
 
     current = _hash_leaf(leaf_public_key)
     pk_id = key_id
+    # reconstruct root by combining each sibling hash
     for sibling in auth_path:
         if pk_id % 2 == 0:
             current = MerkleTree.hash_digests(hash_name, current, sibling)

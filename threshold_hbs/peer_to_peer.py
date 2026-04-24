@@ -88,12 +88,12 @@ class HelperStringServer:
 
 ApprovalPolicy = Callable[[PeerMessageProposal], bool | tuple[bool, str]]
 
-
 def _evaluate_policy(
     party_id: str,
     proposal: PeerMessageProposal,
     approval_policies: Optional[Mapping[str, ApprovalPolicy]] = None,
 ) -> PeerApproval:
+    # default to approval if no policy is provided for this trustee
     if approval_policies is None or party_id not in approval_policies:
         return PeerApproval(party_id=party_id, approved=True, reason="default-approve")
 
@@ -145,11 +145,13 @@ def select_peer_coalition_and_key(
     for coalition, group in candidate_items:
         if group is None:
             continue
+        # candidate coalitions must be fully approved before signing
         if not set(coalition).issubset(approved_parties):
             continue
 
         for key_id in group.assigned_key_ids:
             if key_id not in group.used_key_ids:
+                # reserve the key_id to preserve one-time key usage
                 group.used_key_ids.add(key_id)
                 return coalition, key_id
 
@@ -162,6 +164,7 @@ def _subset_dealer_output_for_coalition(
     key_id: int,
     helper_server: HelperStringServer,
 ) -> DealerOutput:
+    # restrict signing state to trustees in the selected coalition
     group_members = {
         name: trustee
         for name, trustee in dealer_output.members.items()
@@ -171,6 +174,7 @@ def _subset_dealer_output_for_coalition(
         raise PeerCoordinationError("selected coalition is missing one or more trustee states")
 
     helper_backed_crv = list(dealer_output.common_reference_values)
+    # fetch CRV/helper-string material from the untrusted helper server only after approval
     helper_backed_crv[key_id] = helper_server.lookup_crv(key_id)
 
     return DealerOutput(

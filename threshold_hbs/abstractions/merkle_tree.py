@@ -61,6 +61,7 @@ class MerkleTree(ABC):
     def root_digest(self) -> bytes:
         return self.root.digest
 
+    # Collect sibling hashes at each level to reconstruct the path to the root
     def auth_path(self, key_id: int) -> List[bytes]:
         if not (0 <= key_id < self.n_real):
             raise IndexError(f"key_id {key_id} out of range [0, {self.n_real}).")
@@ -83,7 +84,9 @@ class MerkleTree(ABC):
         h.update(right)
         return h.digest()
 
+
 class MerkleTreeSignatures(MerkleTree):
+    # Hash Lamport public key into a single digest
     def hash_leaf_data(self, data: Any) -> bytes:
         h = hashlib.new(self.hash_name)
         for pair in data:
@@ -93,6 +96,7 @@ class MerkleTreeSignatures(MerkleTree):
 
 
 class MerkleTreeMessages(MerkleTree):
+    # Hash message bytes directly to form leaf node
     def hash_leaf_data(self, data: Any) -> bytes:
         h = hashlib.new(self.hash_name)
         h.update(data)

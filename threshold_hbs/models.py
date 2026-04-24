@@ -1,11 +1,7 @@
 from __future__ import annotations
-
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
-
+from typing import Any, Dict, List, Optional, Set, Tuple
 from threshold_hbs.abstractions.signature_scheme import SignatureScheme
-from threshold_hbs.signatures.winternitz import WinternitzSignatureScheme
-
 
 @dataclass
 class SystemParameters:
@@ -18,7 +14,6 @@ class SystemParameters:
         digest_size_bytes: Output size of the message digest used by Lamport signing.
         lamport_element_size_bytes: Byte length of each Lamport secret element.
     """
-    # ext 1
     signature_scheme: SignatureScheme 
     num_parties: int
     num_leaves: int
@@ -29,8 +24,6 @@ class SystemParameters:
     batching: int = 3
 
 
-
-
 @dataclass
 class CommonReferenceValue:
     randomizer: bytes
@@ -39,11 +32,6 @@ class CommonReferenceValue:
     secret_key: List[List[bytes]]
     public_key: List[List[bytes]]
     
-# each CommonReferenceValue is one leaf on the Merkle tree
-# one pair of lamport key - (public, private)
-# path - merkle authentication path for that leaf
-# the lists for pk and sk is: outer - position index, inner - 0 and 1 secret value of that position
-
 
 @dataclass
 class SignatureShare:
@@ -60,12 +48,6 @@ class SignatureShare:
     signature: bytes
     randomizer: bytes
     path: List[bytes]
-
-# what this party returns when asked to sign - signing contribution
-    
-# is it xor or is it prf rn?
-
-
 
 
 @dataclass
@@ -86,75 +68,68 @@ class ThresholdSignature:
     lamport_signature_values: List[bytes]
     auth_path: List[bytes]
 
-# lamport signature values - revealed lamport elements
-
 
 @dataclass
 class TrusteeSharePerKey: 
+    """Stores per-key PRF-derived shares for a trustee."""
 
     randomizer_share: bytes
     randomizer_checker_share: List[bytes]
-    path_share: List[bytes]     # questionable, fr not sure ????
+    path_share: List[bytes]    
     sk_share: List[List[bytes]]
     pk_share: List[List[bytes]]   
-
-    # should have it for ext 1 implementation
     key_id: int | None = None
-
-# one trustee's stored shares for one key_id
-# should have a key_id unless the position of it in trusteeshare corresponds to its key_id??? 
-
 
 
 @dataclass
 class TrusteeShare:
-    prf_key: bytes      # prf seed
-    shares: List[TrusteeSharePerKey]    # this should not exist in the full implementation with will prf right? --- ig i can keep it??
-    # modify - it needs to have party_id?
+    """Stores a trustee's PRF key, per-key shares, and signing state."""
+
+    prf_key: bytes      
+    shares: List[TrusteeSharePerKey]    
     party_id: str | None = None
     hash_name: str = "sha256"
     used_keys: Set[int] = field(default_factory=set)
-    current: Optional[Tuple[int, bytes]] = None     # still dk what is this
+    current: Optional[Tuple[int, bytes]] = None   
 
 
-# We should store the used keys as part of the TrusteeShare objects but, I cannot be bothered writing the code in that way currently
-# In this refactor, we do store them here so that the stateful one-time-key logic stays with each trustee.
 @dataclass
 class DealerOutput:
-    party_id: str       # ? 
-    composite_public_key: bytes     # global public tree root
-    common_reference_values: List[CommonReferenceValue]     # all the leaves in merkle tree
-    public_keys_by_key_id: List[List[List[bytes]]]  # key_id, positions, 0/1 at that position
-    # members: Dict[int, TrusteeShare]    # think of it as all parties --- 
+    """Stores global setup data including CRVs, public keys, and trustee states."""
+    party_id: str       
+    composite_public_key: bytes    
+    common_reference_values: List[CommonReferenceValue]     
+    public_keys_by_key_id: List[List[List[bytes]]]  
     members: Dict[str, TrusteeShare]  
+    # Tracks used key_ids to prevent reuse
     used_keys: Set[int] = field(default_factory=set)
 
-
-# extension 1 class
 @dataclass
 class CoalitionGroup:
-    """
-    stores coalition groups
-    """
+    """Represents a coalition of parties and the key_ids assigned to it."""
+
     group_members: tuple[str, ...] 
     assigned_key_ids: List[int]
     used_key_ids: Set[int] = field(default_factory=set)
 
-
 @dataclass
 class ShardingState:
-    coalition_map: Dict[tuple[str, ...], CoalitionGroup]   # given coalition group, what keys are assigned to them
-    key_to_coalition: Dict[int, tuple[str, ...]]    # given key, which is the corresponding coalition group
+    """Stores mappings between coalition groups and key_ids for signing."""
+    coalition_map: Dict[tuple[str, ...], CoalitionGroup] 
+    key_to_coalition: Dict[int, tuple[str, ...]]   
 
 
 @dataclass
 class BatchSignature:
+    """Stores a batch signature with message index, message path, and root signature."""
     message_index: int
     message_auth_path: List[bytes]
     threshold_signature: ThresholdSignature
 
+
 @dataclass
 class UpperTreeSignature:
+    """Represents a signature in the upper Merkle tree layer."""
     key_id: int
     bottom_root: bytes
     public_key: bytes
@@ -162,8 +137,10 @@ class UpperTreeSignature:
     signature_values: List[bytes]
     auth_path: List[bytes]
 
+
 @dataclass
 class HyperTreeSignature:
+    """Combines batch and upper-tree signatures into a hypertree signature."""
     batch_signature: BatchSignature
     upper_tree_signature: UpperTreeSignature
 

@@ -73,6 +73,7 @@ def verify_merkle_path(
 
     current = _hash_leaf(leaf_public_key)
     pk_id = key_id
+    # reconstruct root by combining each sibling hash
     for sibling in auth_path:
         if pk_id % 2 == 0:
             current = MerkleTree.hash_digests(hash_name, current, sibling)

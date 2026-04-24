@@ -30,6 +30,13 @@ from .sharing import (
     xor
 )
 
+# constants
+PRF_LABEL_AUTH = "AUTH"
+PRF_LABEL_RANDOMIZER = "R"
+PRF_LABEL_CHECKER = "CHK"
+PRF_LABEL_PATH = "PATH"
+PRF_LABEL_CHAIN = "CHAIN"
+PRF_LABEL_PUBLIC = "PUBLIC"
 
 def dealer_setup(      
     params: SystemParameters,
@@ -69,7 +76,7 @@ def dealer_setup(
     merkle_tree, composite_public_key = build_merkle_tree_signatures(public_keys, params.hash_name)
 
     # distribute prf key to parties
-    prf_keys: List[bytes] = [secrets.token_bytes(32) for _ in range(params.num_parties)]
+    prf_keys: List[bytes] = [secrets.token_bytes(params.digest_size_bytes) for _ in range(params.num_parties)]
 
     # create all parties
     trustees = [] 
@@ -110,14 +117,14 @@ def dealer_setup(
             
             prf_seed = trustee.prf_key
             # derive authentication value using PRF
-            chk.append(prf_hmac(prf_seed, "AUTH", key_id_bytes + randomizer, params.digest_size_bytes))
+            chk.append(prf_hmac(prf_seed, PRF_LABEL_AUTH, key_id_bytes + randomizer, params.digest_size_bytes))
             # derive randomizer share for this party
-            randomizer_shares.append(prf_hmac(prf_seed, "R", key_id_bytes, params.digest_size_bytes))
+            randomizer_shares.append(prf_hmac(prf_seed, PRF_LABEL_RANDOMIZER, key_id_bytes, params.digest_size_bytes))
 
             coalition_size = len(assigned_coalition_group)
             
             # expand PRF output and split into per-member checker shares
-            chk_share_raw = prf_hmac(prf_seed, "CHK", key_id_bytes, params.digest_size_bytes * coalition_size)
+            chk_share_raw = prf_hmac(prf_seed, PRF_LABEL_CHECKER, key_id_bytes, params.digest_size_bytes * coalition_size)
             chk_split = []
 
             for i in range(coalition_size):
@@ -126,7 +133,7 @@ def dealer_setup(
             chk_shares.append(chk_split)
 
             # derive shares for each Merkle authentication path node
-            ps_raw = prf_hmac(prf_seed, "PATH", key_id_bytes, sum(map(lambda x: len(x), path)))
+            ps_raw = prf_hmac(prf_seed, PRF_LABEL_PATH, key_id_bytes, sum(map(lambda x: len(x), path)))
             ps_split = []
           
             i, j = 0, 0
@@ -149,7 +156,7 @@ def dealer_setup(
                 for j in range(len(secret_key[0])):
                     member_secret_key_share[i].append(prf_hmac(
                             prf_seed,
-                            "CHAIN",
+                            PRF_LABEL_CHAIN,
                             key_id_bytes + i.to_bytes(4, "big") + j.to_bytes(2, "big"),
                             params.lamport_element_size_bytes,
                         ))
@@ -157,7 +164,7 @@ def dealer_setup(
                 for j in range(len(public_key[0])):
                     member_public_key_share[i].append(prf_hmac(
                             prf_seed,
-                            "PUBLIC",
+                            PRF_LABEL_PUBLIC,
                             key_id_bytes + i.to_bytes(4, "big") + j.to_bytes(2, "big"),
                             len(public_key[i][j]),
                         ))
@@ -241,7 +248,7 @@ def sign_1(share: TrusteeShare, key_id: int, message: bytes) -> Tuple[bytes, Lis
 
 # Verifies that the reconstructed randomizer is valid using PRF-based authentication
 def auth_sign(share: TrusteeShare, key_id: int, randomizer: bytes, randomizer_checker: bytes) -> bool:
-    return prf_hmac(share.prf_key, "AUTH", key_id_to_bytes(key_id) + randomizer, len(randomizer_checker)) == randomizer_checker
+    return prf_hmac(share.prf_key, PRF_LABEL_AUTH, key_id_to_bytes(key_id) + randomizer, len(randomizer_checker)) == randomizer_checker
 
 # Second round of signing: returns this trustee's Merkle path share and Lamport signature share
 def sign_2(share: TrusteeShare, key_id: int, message: bytes, randomizer: bytes, randomizer_checker: bytes, params: SystemParameters = None) -> Tuple[List[bytes], List[bytes]]:

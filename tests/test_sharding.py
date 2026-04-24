@@ -1,10 +1,6 @@
 from __future__ import annotations
-
-import unittest
-
-from tests.test_helpers import SignatureSchemeEnum, make_params
+from tests.test_helpers import make_params
 from threshold_hbs import (
-    SystemParameters,
     verify_threshold_signature,
     dealer_setup,
     coalition_signature_scheme,
@@ -13,17 +9,13 @@ from threshold_hbs import (
     select_signing_coalition_and_key,
 )
 
-
 import threshold_hbs.protocol as protocol
-from threshold_hbs.signatures.lamport import LamportSignatureScheme
-from threshold_hbs.signatures.winternitz import WinternitzSignatureScheme
+import unittest
 
 
 class Extension1Tests(unittest.TestCase):
     def setUp(self) -> None:
         protocol.signature_scheme = None
-
- 
 
     # generate_coalitions
     def test_coalition_generation(self) -> None:
@@ -56,6 +48,7 @@ class Extension1Tests(unittest.TestCase):
         with self.assertRaises(ValueError):
             generate_coalitions(params, ['p0', 'p1', 'p2', 'p3', 'p4', 'p5'])
 
+
     def test_coalition_generation_error_wrong_threshold(self) -> None:
         params = make_params(
             num_parties=5,
@@ -68,7 +61,7 @@ class Extension1Tests(unittest.TestCase):
             generate_coalitions(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
 
     # assign_keys_to_all_coalitions
-    def test_assign_keys_to_all_coalitions(self) -> None:
+    def test_assign_keys_exact_mapping_1(self) -> None:
         params = make_params()
         coalition_groups = generate_coalitions(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
         shardingState = assign_keys_to_all_coalitions(params, coalition_groups)
@@ -89,7 +82,8 @@ class Extension1Tests(unittest.TestCase):
             }
         )
 
-    def test_assign_keys_to_all_coalitions_1(self) -> None:
+
+    def test_assign_keys_exact_mapping_2(self) -> None:
         params = make_params(num_leaves=15)
         coalition_groups = generate_coalitions(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
         sharding_state = assign_keys_to_all_coalitions(params, coalition_groups)
@@ -117,7 +111,8 @@ class Extension1Tests(unittest.TestCase):
             }
         )
 
-    def test_assign_keys_to_all_coalitions_2(self) -> None:
+
+    def test_assign_keys_to_all_coalitions_mapping(self) -> None:
         params = make_params(num_leaves=15)
         coalition_groups = generate_coalitions(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
         sharding_state = assign_keys_to_all_coalitions(params, coalition_groups)
@@ -131,7 +126,7 @@ class Extension1Tests(unittest.TestCase):
             self.assertIn(key_id, sharding_state.coalition_map[coalition].assigned_key_ids)
 
 
-    def test_assign_keys_to_all_coalitions_exact_1(self) -> None:
+    def test_assign_keys_to_all_coalitions_exact_mapping_1(self) -> None:
         params = make_params(num_leaves=15)
         coalition_groups = generate_coalitions(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
         sharding_state = assign_keys_to_all_coalitions(params, coalition_groups)
@@ -145,7 +140,7 @@ class Extension1Tests(unittest.TestCase):
         )
 
 
-    def test_assign_keys_to_all_coalitions_exact_2(self) -> None:
+    def test_assign_keys_to_all_coalitions_exact_mapping_2(self) -> None:
         params = make_params()
         coalition_groups = generate_coalitions(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
         sharding_state = assign_keys_to_all_coalitions(params, coalition_groups)
@@ -215,7 +210,6 @@ class Extension1Tests(unittest.TestCase):
         self.assertIn(1, group.used_key_ids)
 
 
-
     def test_dealer_setup(self) -> None:
         params = make_params()
         dealer_output, sharding_state = dealer_setup(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
@@ -236,7 +230,7 @@ class Extension1Tests(unittest.TestCase):
                     self.assertFalse(has_share, f"{party_id} should not have share for key {key_id}")
 
 
-    def test_dealer_setup_exact(self) -> None:
+    def test_coalition_signature_verification(self) -> None:
         params = make_params()
         dealer_output, sharding_state = dealer_setup(params, ['p0', 'p1', 'p2', 'p3', 'p4'])
 
@@ -274,7 +268,7 @@ class Extension1Tests(unittest.TestCase):
         # exhaust check
         with self.assertRaises(ValueError):
             coalition_signature_scheme(b"extra message", dealer_output, params, sharding_state)
-    
+
 
 
 if __name__ == "__main__":

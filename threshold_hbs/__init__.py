@@ -8,8 +8,6 @@ from .models import (
     TrusteeSharePerKey,
 )
 from .merkle import (
-    build_merkle_tree_signatures,
-    build_merkle_tree_messages,
     get_auth_path,
     verify_merkle_path,
 )

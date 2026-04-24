@@ -1,9 +1,7 @@
 from __future__ import annotations
-
-import hashlib
 from typing import Any, List, Sequence, Tuple
-
 from threshold_hbs.abstractions.merkle_tree import MerkleTree, MerkleTreeMessages, MerkleTreeSignatures
+import hashlib
 
 def build_merkle_tree_signatures(leaf_public_keys: Sequence[Any], hash_name: str = "sha256") -> Tuple[MerkleTree, bytes]:
     """Build a Merkle tree over Lamport public keys.

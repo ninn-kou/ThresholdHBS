@@ -1,16 +1,19 @@
 import os
 from typing import Dict, List, Sequence, Tuple
-
-from threshold_hbs.merkle import build_merkle_tree_messages, build_merkle_tree_signatures, get_auth_path, verify_merkle_path
-from threshold_hbs.models import BatchSignature, HyperTreeSignature, SystemParameters, ThresholdSignature, UpperTreeSignature
+from threshold_hbs.merkle import build_merkle_tree_signatures, get_auth_path, verify_merkle_path
+from threshold_hbs.models import HyperTreeSignature, SystemParameters, UpperTreeSignature
 from threshold_hbs.protocol import batch_coalition_signature_scheme, dealer_setup, verify_batch_signature
 from threshold_hbs.sharing import signing_digest_bytes
 
 
 class SystemController:
+    """
+    High-level controller that manages setup, batching, signing, and verification.
+    """
 
     def __init__(self, global_params: SystemParameters, party_ids: Sequence[str]):
         self.params = global_params
+        # initialise system with dealer setup
         self.active_bottom_tree = dealer_setup(global_params, party_ids)
         self.messages: List[bytes] = []
 
@@ -18,60 +21,67 @@ class SystemController:
         self.secret_keys = []
         self.public_keys = []
 
+        # generate Lamport keypairs 
         for _ in range(global_params.num_leaves):
             sk, pk = global_params.signature_scheme.generate_keypair()
             self.secret_keys.append(sk)
             self.public_keys.append(pk)
 
+        # build upper Merkle tree over Lamport public keys
         self.tree, self.tree_root = build_merkle_tree_signatures(self.public_keys, global_params.hash_name)
         self.next_index = 0
         self.cur_bottom_root = self.cur_dealer_output = self.cur_sharding_state = self.upper_tree_signature = None
 
         self._create_bottom_tree()
 
+    # Create a new bottom level threshold setup and authenticate its root using the upper tree
     def _create_bottom_tree(self):
-       if self.next_index >= self.params.num_leaves:
-           pass
-       
-       dealer_output, sharding_state = dealer_setup(self.params, self.party_ids)
-       bottom_root = dealer_output.composite_public_key
+        if self.next_index >= self.params.num_leaves:
+            pass
+        
+        dealer_output, sharding_state = dealer_setup(self.params, self.party_ids)
+        bottom_root = dealer_output.composite_public_key
 
-       index = self.next_index
-       self.next_index += 1
-       sk = self.secret_keys[index]
+        index = self.next_index
+        self.next_index += 1
+        sk = self.secret_keys[index]
 
-       randomizer = os.urandom(self.params.digest_size_bytes)
-       h = signing_digest_bytes(
-            message=bottom_root, 
-            key_id=index, 
-            randomizer=randomizer, 
-            digest_size_bytes=self.params.digest_size_bytes, 
-            hash_name=self.params.hash_name
+        # generate randomness for upper-layer signing
+        randomizer = os.urandom(self.params.digest_size_bytes)
+        h = signing_digest_bytes(
+                message=bottom_root, 
+                key_id=index, 
+                randomizer=randomizer, 
+                digest_size_bytes=self.params.digest_size_bytes, 
+                hash_name=self.params.hash_name
+            )
+        
+        # sign bottom tree root using Lamport 
+        signature = self.params.signature_scheme.sign(h, sk)
+        path = get_auth_path(self.tree, index)
+
+        self.upper_tree_signature = UpperTreeSignature(
+            key_id=index,
+            bottom_root=bottom_root,
+            public_key=self.public_keys[index],
+            randomizer=randomizer,
+            signature_values=signature,
+            auth_path=path
         )
-       
-       signature = self.params.signature_scheme.sign(h, sk)
-       path = get_auth_path(self.tree, index)
 
-       self.upper_tree_signature = UpperTreeSignature(
-           key_id=index,
-           bottom_root=bottom_root,
-           public_key=self.public_keys[index],
-           randomizer=randomizer,
-           signature_values=signature,
-           auth_path=path
-       )
+        self.cur_dealer_output = dealer_output
+        self.cur_sharding_state = sharding_state
+        self.cur_bottom_root = bottom_root
 
-       self.cur_dealer_output = dealer_output
-       self.cur_sharding_state = sharding_state
-       self.cur_bottom_root = bottom_root
-
+    # Add message to batch buffer if there is enough capacity
     def queue_message(self, message: bytes) -> bool:
         if len(self.messages) >= self.params.batching:
             return False
         else :
             self.messages.append(message)
             return True
-        
+    
+    # Verify message using batch proof and upper-tree signature
     def verify_message(self, message: bytes, signature: HyperTreeSignature) -> bool:
         bottom_root = signature.upper_tree_signature.bottom_root
         
@@ -112,6 +122,7 @@ class SystemController:
         
         return is_path_valid
     
+    # Sign all stored messages as a batch and attach to upper-tree signature 
     def sign_pending_batch(self) -> List[Tuple[bytes, HyperTreeSignature]] | None:
         if len(self.messages) != self.params.batching:
             return None

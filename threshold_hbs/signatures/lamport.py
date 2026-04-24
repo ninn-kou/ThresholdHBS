@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import hashlib
 import secrets
 from ..abstractions import SignatureScheme
-from typing import Any, List, Sequence, Tuple
+from typing import Any, List
 
 class LamportSignatureScheme(SignatureScheme):
 
@@ -88,12 +87,12 @@ class LamportSignatureScheme(SignatureScheme):
                     return False
         return True
 
-
+# Wrapper to generate a Lamport keypair using the signature scheme
 def lamport_generate_keypair(digest_size, element_size, hash_name="sha256"):
     scheme = LamportSignatureScheme(digest_size, element_size, hash_name)
     return scheme.generate_keypair()
 
-
+# Wrapper to sign a message using a Lamport secret key
 def lamport_sign(message, secret_key, hash_name="sha256"):
     scheme = LamportSignatureScheme(len(message), 0, hash_name)
     return scheme.sign(message, secret_key)

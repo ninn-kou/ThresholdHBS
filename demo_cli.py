@@ -104,10 +104,21 @@ class SystemControllerCLI(cmd.Cmd):
         except ValueError:
             print("Error: Invalid indices provided")
 
+    def do_coalitions(self, arg):
+        """Displays coalition groups and key usage"""
+        state = self.controller.cur_sharding_state
+        if not state:
+            print("Error: no sharding state (lowkey should never happen)")
+            return
+            
+        for members, group in state.coalition_map.items():
+            used = len(group.used_key_ids)
+            total = len(group.assigned_key_ids)
+            print(f"[{', '.join(members)}]: {used}/{total} keys used")
+
     def do_quit(self, arg):
         """No description needed"""
         return True
-
 
 def load_params_from_json():
     file_path = "config.json"
@@ -148,11 +159,9 @@ def load_params_from_json():
     
 def main():
     print("Welcome to Threshold HBS CLI, Loading the parameters from config.json:")
-    
 
     global_params = load_params_from_json()
-    party_ids = ["Bob", "Alice", "Aidan"]
-    
+    party_ids = [f"Signee_{i}" for i in range(1, global_params.num_parties + 1)]
     
     print("Type help for a list of commands")
     

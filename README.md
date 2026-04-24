@@ -92,6 +92,34 @@ python -m unittest discover -s tests -v
 
 ### Test Coverage
 
+```
+Name                                             Stmts   Miss  Cover
+--------------------------------------------------------------------
+tests/__init__.py                                    0      0   100%
+tests/test_batch_leaves.py                          41      1    98%
+tests/test_benchmarks.py                           137      1    99%
+tests/test_extension4.py                            19      1    95%
+tests/test_helpers.py                               12      0   100%
+tests/test_peer_to_peer.py                          32      1    97%
+tests/test_sharding.py                             139      1    99%
+threshold_hbs/SystemController.py                   66      5    92%
+threshold_hbs/__init__.py                            8      0   100%
+threshold_hbs/abstractions/__init__.py               3      0   100%
+threshold_hbs/abstractions/merkle_tree.py           74      4    95%
+threshold_hbs/abstractions/signature_scheme.py      22      3    86%
+threshold_hbs/exceptions.py                          4      0   100%
+threshold_hbs/merkle.py                             27      0   100%
+threshold_hbs/models.py                             84      0   100%
+threshold_hbs/peer_to_peer.py                       78      4    95%
+threshold_hbs/protocol.py                          264     33    88%
+threshold_hbs/sharing.py                            70     41    41%
+threshold_hbs/signatures/lamport.py                 46      6    87%
+threshold_hbs/signatures/winternitz.py              23      1    96%
+threshold_hbs/winternitz/helpers.py                 82      9    89%
+--------------------------------------------------------------------
+TOTAL                                             1231    111    91%
+```
+
 # Implementation Details
 ### Base Project 
 The project implements a threshold hash-based signature using one-time signatures and Merkle tree. Shares of signing materials are distibuted among all trustees at setup, and are then collaboratively combined when signing is requested by an aggregator. 

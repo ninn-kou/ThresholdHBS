@@ -5,7 +5,7 @@ from typing import List, Tuple
 from abc import ABC, abstractmethod
 
 class SignatureScheme (ABC):
-
+    """Abstract interface for signature schemes."""
     def __init__ (self, digest_size: int, element_size: int, hash_name: str = "sha256") -> None:
         self.digest_size = digest_size
         self.element_size = element_size

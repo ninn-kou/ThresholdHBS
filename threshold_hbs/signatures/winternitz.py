@@ -1,11 +1,3 @@
-"""Extension 5: Winternitz one-time signatures.
-
-Recommended responsibilities:
-- Winternitz key generation, sign, verify
-- checksum and chain traversal helpers
-- adapters so protocol.py can swap Lamport and Winternitz cleanly
-"""
-
 from __future__ import annotations
 from typing import List, Tuple
 from ..abstractions import SignatureScheme
@@ -24,11 +16,14 @@ class WinternitzSignatureScheme(SignatureScheme):
         # element_size is in bytes; Nim code expects n in bits
         self.n = self.element_size * 8
 
+        # ensure n is divisible by w as required for Winternitz splitting
         if self.n % w != 0:
             raise ValueError("element_size * 8 must be an integer multiple of w")
         
         self.w = w
+        # number of chunks when splitting the message into w-bit pieces
         self.a = self.n // self.w
+        # number of extra checksum chunks to ensure integrity
         self.c = int(ceil(log2(self.a * (2**self.w - 1)) / self.w))
 
     def generate_keypair(self) -> Tuple[List[List[bytes]], List[List[bytes]]]:

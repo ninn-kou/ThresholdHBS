@@ -7,7 +7,6 @@ from threshold_hbs import (
     dealer_setup,
 )
 
-
 from threshold_hbs.merkle import build_merkle_tree_messages
 import threshold_hbs.protocol as protocol
 from threshold_hbs.signatures.lamport import LamportSignatureScheme

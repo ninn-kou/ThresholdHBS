@@ -228,4 +228,4 @@ Thumbs.db
 .prof
 
 
-# End of https://www.toptal.com/developers/gitignore/api/macos,c,python
+# End of https://www.toptal.com/developers/gitignore/api/macos,c,python*.dylib

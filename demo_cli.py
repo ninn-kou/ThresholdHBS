@@ -1,4 +1,6 @@
 import cmd
+import json
+import os
 
 from tests.test_helpers import SignatureSchemeEnum, make_params
 from threshold_hbs import SystemController
@@ -106,28 +108,53 @@ class SystemControllerCLI(cmd.Cmd):
         """No description needed"""
         return True
 
-def main():
-    print("Welcome to Threshold HBS CLI, Please choose a Signature Scheme:")
-    print("1: Lamport, 2: Winternitz")
-    
-    while True:
-        choice = input("> ").strip()
-        if choice in ['1', '2']:
-            break
-        print("Invalid choice")
 
-    signature = None
-    if choice == '1':
-        signature = SignatureSchemeEnum.LAMPORT
-        print("Lamport Signature Scheme selected")
-    else:
-        signature = SignatureSchemeEnum.WINTERNITZ
-        print("Winternitz Signature Scheme selected")
+def load_params_from_json():
+    file_path = "config.json"
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"Configuration file not found: {file_path}")
+    
+    with open(file_path, 'r') as file:
+        data = json.load(file)
+        
+    print("Parameters Chosen:")
+        
+    scheme = data.get("signature_scheme", "Lamport").strip()
+    
+    if scheme == "Winternitz":
+        scheme_enum = SignatureSchemeEnum.WINTERNITZ
+        print("Signature Scheme: Winternitz Signature")
+    else: 
+        scheme_enum = SignatureSchemeEnum.LAMPORT
+        print("Signature Scheme: Lamport Signature")
+    
+    batching = data.get("batching", 4)
+    num_parties = data.get("num_parties", 3)
+    threshold_k = data.get("threshold_k", 2)
+    num_leaves = data.get("num_leaves", 2)
+    
+    print(f"Batching Parameter: {batching}")
+    print(f"No. of Parties Parameter: {num_parties}")
+    print(f"Threshold Parameter Parameter: {threshold_k}")
+    print(f"No. of Leaves Parameter: {num_leaves}")
+    
+    return make_params(
+        signature_scheme=scheme_enum,
+        batching=data.get("batching", 4),
+        num_parties=data.get("num_parties", 3),
+        threshold_k=data.get("threshold_k", 2),
+        num_leaves=data.get("num_leaves", 2)
+    )
+    
+def main():
+    print("Welcome to Threshold HBS CLI, Loading the parameters from config.json:")
+    
+
+    global_params = load_params_from_json()
+    party_ids = ["Bob", "Alice", "Aidan"]
+    
     
     print("Type help for a list of commands")
-
-    global_params = make_params(signature_scheme=signature, batching=4, num_parties=3, threshold_k=2, num_leaves=2)
-    party_ids = ["Bob", "Alice", "Aidan"]
     
     controller = SystemController(global_params, party_ids)
     

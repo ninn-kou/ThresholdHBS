@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import secrets
 from ..abstractions import SignatureScheme
-from typing import Any, List
+from typing import List
 
 class LamportSignatureScheme(SignatureScheme):
 

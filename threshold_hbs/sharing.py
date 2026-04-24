@@ -41,6 +41,7 @@ def concat(x: List[bytes]) -> bytes:
 
 # Converts key_id to the smallest number of bytes
 def key_id_to_bytes(key_id: int) -> bytes:
+    # convert key_id to minimal big-endian byte representation
     width = max(1, (int(key_id).bit_length() + 7) // 8)
     return int(key_id).to_bytes(width, "big")
 

@@ -1,4 +1,31 @@
-## COMP6453-Team-Project
+## ThresholdHBS
+
+**COMP6453 Team Project, Term 1 2026**
+
+Group Members:
+
+<table>
+  <tr>
+    <td>Hao Ren</td>
+    <td>z5237203</td>
+  </tr>
+  <tr>
+    <td>William Kennedy</td>
+    <td>z5420516</td>
+  </tr>
+  <tr>
+    <td>Jiayi Cheng</td>
+    <td>z5423067</td>
+  </tr>
+  <tr>
+    <td>Jonathan Lie</td>
+    <td>z5477832</td>
+  </tr>
+  <tr>
+    <td>Gregory Mathew Jaico</td>
+    <td>z5480004</td>
+  </tr>
+</table>
 
 ### Project Introduction
 This project investigates how stateful hash-based signatures can be adapted into thresh-

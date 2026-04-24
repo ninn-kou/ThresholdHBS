@@ -39,8 +39,8 @@ File Descriptions:
 - **lamport.py**: Defines the `LamportSignatureScheme` class, which implements the Lmaport one-time signature scheme with methods for keypair generation, signing, and verification
 - **winternitz.py**: Defines the `WinternitzSignatureScheme` class, which implements the Winternitz one-time signature scheme with methods for keypair generation, signing and verification
 
-- **merkle_tree.py**: Defines the `MerkleNode`, `MerkleTree`, `MerkleTreeSignatures`, and `MerkleTreeMessages` classes, providing utilities for Merkle tree construction, root digest computation, authentication path generation, and node hashing.
-- **signature_scheme.py**: 
+- **merkle_tree.py**: Defines the `MerkleNode`, `MerkleTree`, `MerkleTreeSignatures`, and `MerkleTreeMessages` classes, which provides utilities for Merkle tree construction, root digest computation, authentication path generation, and node hashing.
+- **signature_scheme.py**: Defines the abstract `SignatureScheme`class, which provides shared hashing utilities and a common interface for keypair generation, signing and verification across schemes.   
 
 ### Initial Demo & Testing
 

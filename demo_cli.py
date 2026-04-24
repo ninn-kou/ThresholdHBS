@@ -15,7 +15,7 @@ class SystemControllerCLI(cmd.Cmd):
         """Displays message queue status"""
         queued = len(self.controller.messages)
         capacity = self.controller.params.batching
-        print(f"{queued}/{capacity}")
+        print(f"Message queue/batch status: {queued}/{capacity}")
 
     def do_queue(self, arg):
         """Queue message: queue <msg>"""
@@ -95,9 +95,9 @@ class SystemControllerCLI(cmd.Cmd):
             is_valid = self.controller.verify_message(msg, sig)
             
             if is_valid:
-                print("VALID: Message verified")
+                print(f"VALID: Message verified (using msg at [{msg_index}] and sig at [{sig_index}])")
             else:
-                print("INVALID: Message did not pass verification")
+                print(f"INVALID: Message did not pass verification (using msg at [{msg_index}] and sig at [{sig_index}])")
                 
         except ValueError:
             print("Error: Invalid indices provided")
@@ -126,7 +126,7 @@ def main():
     
     print("Type help for a list of commands")
 
-    global_params = make_params(signature_scheme=signature, batching=1, num_parties=3, threshold_k=2, num_leaves=2)
+    global_params = make_params(signature_scheme=signature, batching=4, num_parties=3, threshold_k=2, num_leaves=2)
     party_ids = ["Bob", "Alice", "Aidan"]
     
     controller = SystemController(global_params, party_ids)
